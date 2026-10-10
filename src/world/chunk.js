@@ -201,8 +201,16 @@ export function buildChunkGeometry(world, chunk) {
     return Math.max(sky / 15, bl / 15);
   };
 
-  const pushQuad = (target, tPos, tNorm, tUv, tCol, idxBase, flip) => {
-    if (flip) {
+  const pushQuad = (target, idxBase, flip, reverseWinding = false) => {
+    if (reverseWinding) {
+      if (flip) {
+        target.i.push(idxBase + 1, idxBase + 3, idxBase + 2);
+        target.i.push(idxBase + 1, idxBase + 0, idxBase + 3);
+      } else {
+        target.i.push(idxBase + 0, idxBase + 2, idxBase + 1);
+        target.i.push(idxBase + 0, idxBase + 3, idxBase + 2);
+      }
+    } else if (flip) {
       target.i.push(idxBase + 1, idxBase + 2, idxBase + 3);
       target.i.push(idxBase + 1, idxBase + 3, idxBase + 0);
     } else {
@@ -226,7 +234,10 @@ export function buildChunkGeometry(world, chunk) {
             ? (def.cropTiles ? def.cropTiles[Math.min(meta, def.cropTiles.length - 1)] : def.tiles[0])
             : def.tiles[0];
           const uvRect = tileUV(tile);
-          const light = lightAt(x, y, z);
+          // Pflanzen ohne Beleuchtungsmodell ganz auf Schwarz fallen zu lassen,
+          // macht sie selbst bei kleinen Lichtdatenfehlern unsichtbar. Die
+          // Materialtönung übernimmt weiterhin den Tag-/Nachtwechsel.
+          const light = Math.max(0.45, lightAt(x, y, z));
           const r = light, g = light, b = light;
           const planes = [
             [[x + 0.1, y, z + 0.1], [x + 0.9, y, z + 0.9]],
@@ -398,7 +409,11 @@ export function buildChunkGeometry(world, chunk) {
 
           // Triangulierung (AO-Kante flippen für besseren Verlauf)
           const flip = aoValues[0] + aoValues[2] > aoValues[1] + aoValues[3];
-          pushQuad(target, null, null, null, null, base, flip);
+          // Die seitlichen FACES sind in der Vertex-Reihenfolge nach innen
+          // gewunden. Indizes hier umdrehen, damit FrontSide-Materialien die
+          // Außenseite tatsächlich zeichnen (Three.js verwirft Rückseiten).
+          const reverseWinding = face.dir[1] === 0;
+          pushQuad(target, base, flip, reverseWinding);
         }
       }
     }

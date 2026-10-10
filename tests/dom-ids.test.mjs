@@ -60,6 +60,17 @@ for (const id of hudIds) {
   }
 }
 
+// Der Vollbildknopf muss im Hauptmenü außerhalb des HUD-Overlays erreichbar sein.
+const mainMenuStart = html.indexOf('<div id="main-menu"');
+const pauseScreenStart = html.indexOf('<!-- Pause -->', mainMenuStart);
+const mainMenuMarkup = mainMenuStart >= 0 && pauseScreenStart > mainMenuStart
+  ? html.slice(mainMenuStart, pauseScreenStart)
+  : '';
+if (!mainMenuMarkup.includes('id="btn-fullscreen-menu"')) {
+  console.error('✘ Vollbildknopf fehlt im Hauptmenü');
+  failed++;
+}
+
 // Einstellungen
 const settingIds = [
   'setting-render-distance', 'setting-fov', 'setting-sensitivity',

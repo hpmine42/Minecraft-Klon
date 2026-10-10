@@ -127,6 +127,7 @@ class Game {
       'btn-help-back': $('btn-help-back'),
       'btn-selftest': $('btn-selftest'),
       'btn-fullscreen': $('btn-fullscreen'),
+      'btn-fullscreen-menu': $('btn-fullscreen-menu'),
       'btn-reset-world': $('btn-reset-world'),
       'btn-delete-save': $('btn-delete-save'),
       'btn-selftest-back': $('btn-selftest-back'),
@@ -435,12 +436,19 @@ class Game {
   }
 
   _syncFullscreenButton() {
-    const button = $('btn-fullscreen');
-    if (!button) return;
     const active = !!(document.fullscreenElement || document.webkitFullscreenElement);
-    button.setAttribute('aria-pressed', String(active));
-    button.setAttribute('aria-label', active ? 'Vollbildmodus beenden' : 'Vollbildmodus aktivieren');
-    button.title = active ? 'Vollbildmodus beenden' : 'Vollbildmodus aktivieren';
+    const label = active ? 'Vollbildmodus beenden' : 'Vollbildmodus aktivieren';
+    const button = $('btn-fullscreen');
+    if (button) {
+      button.setAttribute('aria-pressed', String(active));
+      button.setAttribute('aria-label', label);
+      button.title = label;
+    }
+    const menuButton = $('btn-fullscreen-menu');
+    if (menuButton) {
+      menuButton.setAttribute('aria-pressed', String(active));
+      menuButton.textContent = active ? '⛶ Vollbildmodus beenden' : '⛶ Vollbildmodus aktivieren';
+    }
   }
 
   pause() {
