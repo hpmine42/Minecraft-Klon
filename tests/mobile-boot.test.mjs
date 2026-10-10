@@ -20,7 +20,7 @@ function makeEl(id) {
     height: 32,
     offsetWidth: 100,
     firstChild: { style: {} },
-    appendChild(c) { this.children.push(c); return c; },
+    appendChild(c) { c.parentElement = this; this.children.push(c); return c; },
     removeChild(c) { return c; },
     addEventListener(type, fn) {
       (listeners[type] = listeners[type] || []).push(fn);
@@ -39,6 +39,12 @@ function makeEl(id) {
     querySelectorAll: () => [],
     focus() {},
     requestPointerLock() {},
+    closest(selector) {
+      for (let el = this; el; el = el.parentElement) {
+        if (selector === '.inv-slot' && el.dataset?.slotKind) return el;
+      }
+      return null;
+    },
     el: null,
   };
 }
@@ -130,17 +136,25 @@ globalThis.window = {
     resume() {}
   },
 };
+const documentListeners = {};
 globalThis.document = {
   readyState: 'loading',
   getElementById: elById,
   createElement: () => makeEl('dyn'),
-  addEventListener() {},
+  addEventListener(type, fn) { (documentListeners[type] ||= []).push(fn); },
   removeEventListener() {},
+  dispatch(type, event) { for (const fn of documentListeners[type] || []) fn(event); },
+  elementFromPoint() { return this._pointElement || null; },
   pointerLockElement: null,
+  fullscreenElement: null,
+  exitFullscreen() { this.fullscreenElement = null; },
   exitPointerLock() {},
   hidden: false,
   body: makeEl('body'),
   documentElement: makeEl('html'),
+};
+globalThis.document.documentElement.requestFullscreen = async function requestFullscreen() {
+  globalThis.document.fullscreenElement = this;
 };
 globalThis.localStorage = {
   _data: {},
@@ -149,11 +163,10 @@ globalThis.localStorage = {
   removeItem(k) { delete this._data[k]; },
 };
 globalThis.confirm = () => true;
-let rafCount = 0;
+let rafRunning = true;
 globalThis.requestAnimationFrame = (fn) => {
-  rafCount++;
-  if (rafCount > 300) return 0;
-  return setTimeout(() => fn(performance.now()), 4);
+  if (!rafRunning) return 0;
+  return setTimeout(() => { if (rafRunning) fn(performance.now()); }, 4);
 };
 globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
 
@@ -221,6 +234,9 @@ jumpBtn.dispatch('touchend', makeEvent([{ identifier: 4, clientX: 10, clientY: 1
 await new Promise((r) => setTimeout(r, 30));
 jumpBtn.dispatch('touchstart', makeEvent([{ identifier: 5, clientX: 10, clientY: 10 }]));
 ok(game.player.flying === true, 'Doppelsprung schaltet Fliegen an');
+jumpBtn.dispatch('touchend', makeEvent([{ identifier: 5, clientX: 10, clientY: 10 }]));
+game.player.flying = true; // Im Kreativflug bleibt die Testposition stabil.
+game.player.velocity.x = game.player.velocity.y = game.player.velocity.z = 0;
 
 // Platzieren-Button (Block in der Welt)
 const placeBtn = elById('btn-place');
@@ -232,12 +248,77 @@ placeBtn.dispatch('touchend', makeEvent([{ identifier: 6, clientX: 10, clientY: 
 await new Promise((r) => setTimeout(r, 60));
 ok(true, 'Platzieren-Button ohne Fehler');
 
+// Mobile Pocket-Edition-Stil: ruhiger Long-Press auf eine Pflanze baut sie ab
+// (Touchposition wird auf einen Bildschirm-Strahl projiziert, nicht nur aufs Fadenkreuz).
+game.player.yaw = 0;
+game.player.pitch = 0;
+const eye = game.player.eyePosition();
+const targetBlock = {
+  x: Math.floor(game.player.position.x),
+  y: Math.floor(eye.y),
+  z: Math.floor(game.player.position.z) - 3,
+};
+game.world.setBlock(targetBlock.x, targetBlock.y, targetBlock.z, BLOCK.FLOWER_RED);
+const directRay = game.world.raycast(eye, game.player.lookDir(), 5.2);
+ok(directRay?.id === BLOCK.FLOWER_RED, 'Testblume liegt im Blickfeld');
+const raycastMob = game.mobs.raycastMob;
+game.mobs.raycastMob = () => null; // deterministisch auf den Block fokussieren
+const interactionUpdate = game.interaction.update.bind(game.interaction);
+let mineFrames = 0;
+game.interaction.update = (dt, actions, camera) => {
+  if (actions.attack && actions.attackDirection) mineFrames++;
+  return interactionUpdate(dt, actions, camera);
+};
+lookZone.dispatch('touchstart', makeEvent([{ identifier: 12, clientX: 195, clientY: 422 }]));
+await new Promise((r) => setTimeout(r, 420));
+lookZone.dispatch('touchend', makeEvent([{ identifier: 12, clientX: 195, clientY: 422 }]));
+game.mobs.raycastMob = raycastMob;
+game.interaction.update = interactionUpdate;
+ok(mineFrames > 0, 'Mobile-Long-Press wird im Spiel als gehaltener Abbau verarbeitet');
+ok(game.world.getBlock(targetBlock.x, targetBlock.y, targetBlock.z) === BLOCK.AIR,
+  'Gedrückthalten auf dem Block baut ihn direkt ab');
+
 // Inventar-Button öffnet Inventar
 const invBtn = elById('btn-inventory');
 invBtn.dispatch('touchstart', makeEvent([{ identifier: 7, clientX: 10, clientY: 10 }]));
 ok(game.state === 'inventory', 'Inventar-Button öffnet Inventar');
+
+// Item mit einem Finger aus dem Inventar direkt ins 3×3-Craftingfeld ziehen.
+game.inventory.slots[9] = { id: BLOCK.LOG, count: 1, dur: null };
+game.menus.refreshInventory();
+const logSlot = game.menus.invSlotEls.find((slot) => slot.index === 9);
+const craftTarget = game.menus.craftSlotEls[4];
+logSlot.el.dispatch('touchstart', makeEvent([{ identifier: 20, clientX: 100, clientY: 300 }]));
+document._pointElement = craftTarget.canvas; // Browser elementFromPoint trifft meist das Slot-Icon.
+document.dispatch('touchmove', makeEvent([{ identifier: 20, clientX: 180, clientY: 380 }]));
+document.dispatch('touchend', makeEvent([{ identifier: 20, clientX: 180, clientY: 380 }]));
+ok(game.inventory.slots[9] === null && game.menus.craftGrid[4]?.id === BLOCK.LOG && game.menus.heldStack === null,
+  'Mobiles Drag-and-Drop verschiebt den Gegenstand ohne Duplikat ins Craftingfeld');
+ok(game.menus.resultSlotEl.stack?.id === BLOCK.PLANKS,
+  'Crafting-Ergebnis wird nach dem mobilen Ablegen aktualisiert');
+
+// Die bisherige Zwei-Tap-Bedienung bleibt neben Drag-and-Drop verfügbar.
+game.inventory.slots[10] = { id: BLOCK.COBBLESTONE, count: 2, dur: null };
+game.menus.refreshInventory();
+const cobbleSlot = game.menus.invSlotEls.find((slot) => slot.index === 10);
+cobbleSlot.el.dispatch('touchstart', makeEvent([{ identifier: 21, clientX: 110, clientY: 300 }]));
+document._pointElement = cobbleSlot.el;
+document.dispatch('touchend', makeEvent([{ identifier: 21, clientX: 110, clientY: 300 }]));
+game.menus.craftSlotEls[0].el.dispatch('touchstart', makeEvent([{ identifier: 22, clientX: 150, clientY: 350 }]));
+document._pointElement = game.menus.craftSlotEls[0].el;
+document.dispatch('touchend', makeEvent([{ identifier: 22, clientX: 150, clientY: 350 }]));
+ok(game.menus.craftGrid[0]?.id === BLOCK.COBBLESTONE,
+  'Inventar-Items lassen sich weiterhin per Antippen und erneutem Antippen ablegen');
+game.menus._returnCraftGrid();
+
+document._pointElement = null;
 invBtn.dispatch('touchstart', makeEvent([{ identifier: 8, clientX: 10, clientY: 10 }]));
 ok(game.state === 'playing', 'Inventar-Button schließt Inventar');
+const craftBtn = elById('btn-craft');
+craftBtn.dispatch('touchstart', makeEvent([{ identifier: 25, clientX: 10, clientY: 10 }]));
+ok(game.state === 'inventory', 'Crafting-Schnellknopf öffnet das Inventar');
+invBtn.dispatch('touchstart', makeEvent([{ identifier: 26, clientX: 10, clientY: 10 }]));
+ok(game.state === 'playing', 'Inventar bleibt über den Schnellknopf schließbar');
 
 // Menü-Button → Pause
 const menuBtn = elById('btn-menu');
@@ -246,8 +327,18 @@ ok(game.state === 'paused', 'Menü-Button öffnet Pause');
 menuBtn.dispatch('touchstart', makeEvent([{ identifier: 10, clientX: 10, clientY: 10 }]));
 ok(game.state === 'playing', 'Menü-Button kehrt zurück');
 
+// Vollbildmodus lässt sich auf dem Handy ein- und ausschalten.
+const fullscreenBtn = elById('btn-fullscreen');
+fullscreenBtn.dispatch('touchend', makeEvent([{ identifier: 23, clientX: 20, clientY: 20 }]));
+await new Promise((r) => setTimeout(r, 0));
+ok(document.fullscreenElement === document.documentElement, 'Vollbildknopf aktiviert den Vollbildmodus');
+fullscreenBtn.dispatch('touchend', makeEvent([{ identifier: 24, clientX: 20, clientY: 20 }]));
+await new Promise((r) => setTimeout(r, 0));
+ok(document.fullscreenElement === null, 'Vollbildknopf beendet den Vollbildmodus wieder');
+
 // Pixel-Ratio für Handy begrenzt
 ok(game.engine.pixelRatio <= 1.75, `Pixel-Ratio gedrosselt (${game.engine.pixelRatio})`);
 
+rafRunning = false;
 console.log(`\n${passed} bestanden, ${failed} fehlgeschlagen`);
 process.exit(failed > 0 ? 1 : 0);

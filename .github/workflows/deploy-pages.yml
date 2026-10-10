@@ -22,8 +22,8 @@ concurrency:
 
 jobs:
   # ------------------------------------------------------------------
-  # 1) Automatisierte Tests (271 Prüfungen: Welt, Spiel, Module, Boot,
-  #    Handy-Boot, Touch, DOM) – ohne Browser lauffähig
+# 1) Automatisierte Tests (294 Prüfungen: Welt, Spiel, Module, Boot,
+#    Handy-Boot, Touch, DOM) – ohne Browser lauffähig
   # ------------------------------------------------------------------
   test:
     runs-on: ubuntu-latest

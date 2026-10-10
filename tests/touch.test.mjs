@@ -1,5 +1,5 @@
 // touch.test.mjs — Touch-Steuerung testen: Joystick, Look-Drag, Buttons, Doppelsprung.
-import { TouchControls, isTouchDevice, markTouchEvent, wasRecentTouch } from '../src/core/touch.js';
+import { TouchControls, isTouchDevice, markTouchEvent, wasRecentTouch, screenRayDirection } from '../src/core/touch.js';
 
 let passed = 0;
 let failed = 0;
@@ -86,6 +86,13 @@ els.joystickZone.dispatch('touchend', makeEvent([{ identifier: 1, clientX: 0, cl
 m = touch.movement();
 ok(m.right === 0 && m.forward === 0, 'Joystick zurückgesetzt nach Loslassen');
 
+els.joystickZone.dispatch('touchstart', makeEvent([{ identifier: 13, clientX: 80, clientY: 500 }]));
+await new Promise((r) => setTimeout(r, 160));
+const joystickMine = touch.minePoint();
+ok(joystickMine?.x === 80 && joystickMine?.y === 500,
+  'Ruhiger Long-Press funktioniert auch links neben dem Joystick-Knopf');
+els.joystickZone.dispatch('touchend', makeEvent([{ identifier: 13, clientX: 80, clientY: 500 }]));
+
 // ---- Look-Drag -------------------------------------------------------------
 els.lookZone.dispatch('touchstart', makeEvent([{ identifier: 2, clientX: 300, clientY: 100 }]));
 els.lookZone.dispatch('touchmove', makeEvent([{ identifier: 2, clientX: 340, clientY: 110 }]));
@@ -98,6 +105,31 @@ els.lookZone.dispatch('touchend', makeEvent([{ identifier: 2, clientX: 340, clie
 els.lookZone.dispatch('touchmove', makeEvent([{ identifier: 2, clientX: 400, clientY: 100 }]));
 const look3 = touch.consumeLook();
 ok(look3.x === 0, 'Kein Look nach Touch-Ende');
+
+// Bildschirmstrahl: Mittelpunkt entspricht Blickrichtung, Randpunkt wird versetzt.
+const rayPlayer = {
+  yaw: 0,
+  pitch: 0,
+  lookDir: () => ({ x: 0, y: 0, z: -1 }),
+};
+const centerRay = screenRayDirection(rayPlayer, { x: 195, y: 422 }, 390, 844, 75);
+ok(Math.abs(centerRay.x) < 0.001 && Math.abs(centerRay.y) < 0.001 && centerRay.z < -0.999,
+  'Bildschirmmitte zielt geradeaus');
+const upperRightRay = screenRayDirection(rayPlayer, { x: 292.5, y: 211 }, 390, 844, 75);
+ok(upperRightRay.x > 0 && upperRightRay.y > 0 && upperRightRay.z < 0,
+  'Touchposition oben rechts erzeugt korrekten Weltstrahl');
+ok(Math.abs(Math.hypot(upperRightRay.x, upperRightRay.y, upperRightRay.z) - 1) < 0.001,
+  'Touch-Strahl ist normalisiert');
+
+// Long-Press zum Abbauen (ab 140 ms); ein Wisch bleibt reine Blicksteuerung.
+els.lookZone.dispatch('touchstart', makeEvent([{ identifier: 12, clientX: 280, clientY: 250 }]));
+await new Promise((r) => setTimeout(r, 160));
+const minePoint = touch.minePoint();
+ok(minePoint?.x === 280 && minePoint?.y === 250, 'Stillhalten aktiviert Mobile-Long-Press');
+els.lookZone.dispatch('touchmove', makeEvent([{ identifier: 12, clientX: 300, clientY: 250 }]));
+ok(touch.minePoint() === null, 'Wischen dreht Blick, löst keinen Abbau aus');
+els.lookZone.dispatch('touchend', makeEvent([{ identifier: 12, clientX: 300, clientY: 250 }]));
+ok(touch.minePoint() === null, 'Loslassen beendet Mobile-Long-Press');
 
 // ---- Buttons ---------------------------------------------------------------
 els.btnAttack.dispatch('touchstart', makeEvent([{ identifier: 3, clientX: 10, clientY: 10 }]));

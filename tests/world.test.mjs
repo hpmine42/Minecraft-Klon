@@ -1,9 +1,9 @@
 // Schnelltest der Weltmodule (ohne Browser).
 import { PerlinNoise, mulberry32, hashSeed, coordHash } from '../src/world/noise.js';
 import { BLOCKS, BLOCK, breakSpeed, getDrop, TOOL, isSolid } from '../src/world/blocks.js';
-import { generateAtlasData, ATLAS_SIZE } from '../src/world/textures.js';
+import { generateAtlasData, ATLAS_SIZE, TILE_SIZE, ATLAS_COLS } from '../src/world/textures.js';
 import { World } from '../src/world/world.js';
-import { CHUNK_SIZE, CHUNK_HEIGHT, blockIndex } from '../src/world/chunk.js';
+import { CHUNK_SIZE, CHUNK_HEIGHT, blockIndex, Chunk, buildChunkGeometry } from '../src/world/chunk.js';
 import { BIOME_NAMES } from '../src/world/worldgen.js';
 
 let passed = 0;
@@ -53,6 +53,18 @@ const atlas = generateAtlasData(1337);
 ok(atlas.size === ATLAS_SIZE, 'Atlas-Größe');
 ok(atlas.pixels.length === ATLAS_SIZE * ATLAS_SIZE * 4, 'Atlas-Pixel');
 ok(atlas.pixels.some((x) => x > 0), 'Atlas hat Inhalt');
+const atlasPixel = (tile, x, y) => {
+  const ax = (tile % ATLAS_COLS) * TILE_SIZE + x;
+  const ay = Math.floor(tile / ATLAS_COLS) * TILE_SIZE + y;
+  return (ay * ATLAS_SIZE + ax) * 4;
+};
+ok(atlas.pixels[atlasPixel(35, 0, 0) + 3] === 0, 'Blumen-Textur hat transparenten Hintergrund');
+ok(atlas.pixels[atlasPixel(35, 7, 10) + 3] === 255, 'Blumen-Stiel ist sichtbar/undurchsichtig');
+ok(atlas.pixels[atlasPixel(37, 0, 0) + 3] === 0, 'Gras-Textur hat transparenten Hintergrund');
+ok(atlas.pixels[atlasPixel(25, 0, 0) + 3] === 255, 'Laub-Textur füllt die ganze Kachel');
+ok(atlas.pixels[atlasPixel(43, 2, 2) + 3] === 0, 'Glas-Textur hat transparenten Hintergrund');
+ok(atlas.pixels[atlasPixel(43, 0, 8) + 3] === 255, 'Glasrahmen bleibt sichtbar');
+ok(BLOCKS[BLOCK.LEAVES].transparent === false, 'Laub blockiert die Sicht (kein schwarzer Himmel durch Löcher)');
 
 // Welt
 const world = new World(12345, 'normal', {});
@@ -120,6 +132,21 @@ if (mesh) {
   ok(mesh.geometry.attributes.color.count === mesh.geometry.attributes.position.count, 'Farbattribute passen');
   ok(mesh.geometry.index.count % 3 === 0, 'Indizes durch 3 teilbar');
 }
+
+// Block-Außenseiten, dichtes Laub und Pflanzen ohne Z-Fighting
+const probeChunk = new Chunk(0, 0);
+const probeWorld = { getBlock: () => BLOCK.AIR, getSkyLight: () => 15, getBlockLight: () => 0 };
+probeChunk.set(8, 30, 8, BLOCK.STONE);
+let probeGeometry = buildChunkGeometry(probeWorld, probeChunk);
+ok(probeGeometry.solid?.attributes.position.count === 24, 'Einzelner Block rendert alle sechs Außenseiten');
+probeChunk.set(8, 30, 8, BLOCK.LEAVES);
+probeGeometry = buildChunkGeometry(probeWorld, probeChunk);
+ok(probeGeometry.solid?.attributes.position.count === 24 && probeGeometry.transparent === null,
+  'Laub ist geschlossen und rendert im opaken Pass');
+probeChunk.set(8, 30, 8, BLOCK.FLOWER_RED);
+probeGeometry = buildChunkGeometry(probeWorld, probeChunk);
+ok(probeGeometry.transparent?.attributes.position.count === 8,
+  'Kreuzpflanze hat genau zwei Flächen ohne doppelte Z-Fighting-Quads');
 
 console.log(`\n${passed} bestanden, ${failed} fehlgeschlagen`);
 if (failed > 0) process.exit(1);

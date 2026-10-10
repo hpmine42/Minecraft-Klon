@@ -183,6 +183,12 @@ const ok = (cond, msg) => {
 ok(!!game, 'Spiel-Instanz vorhanden');
 ok(game.state === 'menu', `Zustand nach Boot: ${game.state} (erwartet menu)`);
 ok(!!game.engine, 'Engine initialisiert');
+game.engine.updateSky(0, 3, 0.016, 0);
+ok(game.engine.dayFactor > 0.3 && game.engine.dayFactor < 0.4, 'Himmel startet am Sonnenaufgang');
+game.engine.updateSky(0.25, 3, 0.016, 0);
+ok(game.engine.dayFactor === 1 && game.engine.isDay(), 'Sonnenstand mittags stimmt');
+game.engine.updateSky(0.75, 3, 0.016, 0);
+ok(game.engine.dayFactor === 0 && !game.engine.isDay(), 'Nacht und Mob-Tageslogik stimmen überein');
 ok(!!game.engine.renderer, 'Renderer vorhanden');
 ok(!!game.atlasCanvas, 'Textur-Atlas erzeugt');
 ok(!!game.world || game.state === 'menu', 'Welt noch nicht nötig im Menü');

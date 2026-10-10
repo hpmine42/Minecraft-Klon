@@ -96,7 +96,7 @@ export const RENDER = {
   CROSS: 'cross',      // X-förmige Pflanzen
   TORCH: 'torch',      // Fackel (schlank)
   WATER: 'water',      // transparent, animiert
-  LEAVES: 'leaves',    // transparent
+  LEAVES: 'leaves',    // dichtes Blattwerk
   GLASS: 'glass',      // transparent, glatt
   CROP: 'crop',        // Pflanzen mit Wachstumsstufen
   LADDER: 'ladder',
@@ -220,21 +220,21 @@ reg(def(BLOCK.LOG, 'Eichenstamm', {
   tiles: [24, 23, 24], hardness: 2, tool: TOOL.AXE, flammable: true,
 }));
 reg(def(BLOCK.LEAVES, 'Eichenlaub', {
-  tiles: [25, 25, 25], hardness: 0.2, render: RENDER.LEAVES, transparent: true,
+  tiles: [25, 25, 25], hardness: 0.2, render: RENDER.LEAVES, transparent: false,
   flammable: true, drops: null,
 }));
 reg(def(BLOCK.BIRCH_LOG, 'Birkenstamm', {
   tiles: [27, 26, 27], hardness: 2, tool: TOOL.AXE, flammable: true,
 }));
 reg(def(BLOCK.BIRCH_LEAVES, 'Birkenlaub', {
-  tiles: [28, 28, 28], hardness: 0.2, render: RENDER.LEAVES, transparent: true,
+  tiles: [28, 28, 28], hardness: 0.2, render: RENDER.LEAVES, transparent: false,
   flammable: true, drops: null,
 }));
 reg(def(BLOCK.SPRUCE_LOG, 'Fichtenstamm', {
   tiles: [30, 29, 30], hardness: 2, tool: TOOL.AXE, flammable: true,
 }));
 reg(def(BLOCK.SPRUCE_LEAVES, 'Fichtenlaub', {
-  tiles: [31, 31, 31], hardness: 0.2, render: RENDER.LEAVES, transparent: true,
+  tiles: [31, 31, 31], hardness: 0.2, render: RENDER.LEAVES, transparent: false,
   flammable: true, drops: null,
 }));
 reg(def(BLOCK.PLANKS, 'Holzbretter', {
