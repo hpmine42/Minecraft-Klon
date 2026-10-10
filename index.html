@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a2b1a">
+  <title>Minecraft-Klon – Voxel-Abenteuer für PC & Handy</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%2358a83c'/><rect y='50' width='100' height='50' fill='%237a5230'/></svg>">
+</head>
+<body>
+  <!-- Spiel-Canvas -->
+  <canvas id="game"></canvas>
+
+  <!-- ============================== HUD ============================== -->
+  <div id="hud">
+    <div id="water-overlay"></div>
+    <div id="hurt-overlay"></div>
+
+    <div id="crosshair"><div class="ch-h"></div><div class="ch-v"></div></div>
+    <div id="break-progress"></div>
+
+    <div id="stats-bars">
+      <div id="hearts"></div>
+      <div id="hunger"></div>
+      <div id="air"></div>
+    </div>
+
+    <div id="hotbar-wrap">
+      <div id="hotbar"></div>
+      <div id="item-name"></div>
+      <div id="mode-label"></div>
+    </div>
+
+    <div id="fps"></div>
+    <pre id="debug"></pre>
+
+    <!-- ===================== Mobile Steuerung ===================== -->
+    <div id="mobile-controls">
+      <div id="joystick-zone">
+        <div id="joystick-base">
+          <div id="joystick-knob"></div>
+        </div>
+      </div>
+      <div id="look-zone"></div>
+
+      <div id="action-buttons">
+        <button id="btn-attack" class="touch-btn big" aria-label="Abbauen / Angreifen">⛏</button>
+        <button id="btn-place" class="touch-btn big" aria-label="Platzieren">▣</button>
+      </div>
+
+      <div id="move-buttons">
+        <button id="btn-jump" class="touch-btn" aria-label="Springen">⬆</button>
+        <button id="btn-sneak" class="touch-btn" aria-label="Schleichen">⬇</button>
+        <button id="btn-fly" class="touch-btn" aria-label="Fliegen">🕊</button>
+      </div>
+
+      <div id="menu-buttons">
+        <button id="btn-inventory" class="touch-btn small" aria-label="Inventar">🎒</button>
+        <button id="btn-craft" class="touch-btn small" aria-label="Craften">🔨</button>
+        <button id="btn-debug" class="touch-btn small" aria-label="Debug">ℹ</button>
+        <button id="btn-menu" class="touch-btn small" aria-label="Menü">⚙</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ Screens ============================ -->
+  <div id="screens">
+
+    <!-- Hauptmenü -->
+    <div id="main-menu" class="screen visible">
+      <div class="menu-panel main-panel">
+        <h1 class="game-title">MINECRAFT<span>-KLON</span></h1>
+        <p class="subtitle">Voxel-Abenteuer für Computer & Handy</p>
+
+        <div class="menu-buttons-col">
+          <button id="btn-play" class="menu-btn primary">▸ Spiel fortsetzen</button>
+
+          <div class="new-world-box">
+            <h3>Neue Welt</h3>
+            <label>Seed (leer = zufällig)
+              <input id="seed-input" type="text" placeholder="z. B. 12345 oder „Wald“" maxlength="32">
+            </label>
+            <label>Welttyp
+              <select id="world-type">
+                <option value="normal">Normal (Berge, Höhlen, Biome)</option>
+                <option value="flat">Flach (Bauwelt)</option>
+              </select>
+            </label>
+            <label>Spielmodus
+              <select id="game-mode">
+                <option value="survival">Überleben</option>
+                <option value="creative">Kreativ</option>
+              </select>
+            </label>
+            <label class="check-label">
+              <input id="peaceful-mode" type="checkbox" checked> Friedlich (keine Monster)
+            </label>
+            <button id="btn-new-world" class="menu-btn">✦ Neue Welt starten</button>
+          </div>
+
+          <button id="btn-open-settings" class="menu-btn">⚙ Einstellungen</button>
+          <button id="btn-help" class="menu-btn">? Steuerung & Hilfe</button>
+          <button id="btn-selftest" class="menu-btn">♥ Selbstdiagnose (auch fürs Handy)</button>
+        </div>
+
+        <p class="hint">Tipp: Öffne diese Seite einfach auf dem Handy – die Steuerung passt sich automatisch an.</p>
+      </div>
+    </div>
+
+    <!-- Pause -->
+    <div id="pause-menu" class="screen">
+      <div class="menu-panel">
+        <h2>Pause</h2>
+        <div class="menu-buttons-col">
+          <button id="btn-resume" class="menu-btn primary">▸ Weiterspielen</button>
+          <button id="btn-settings-from-pause" class="menu-btn">⚙ Einstellungen</button>
+          <button id="btn-save" class="menu-btn">💾 Spiel speichern</button>
+          <button id="btn-quit" class="menu-btn">🏠 Speichern & zum Hauptmenü</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Einstellungen -->
+    <div id="settings-screen" class="screen">
+      <div class="menu-panel wide">
+        <h2>Einstellungen</h2>
+        <div class="settings-grid">
+          <label>Renderdistanz <span id="setting-render-distance-value" class="val"></span>
+            <input id="setting-render-distance" type="range" min="2" max="10" step="1">
+          </label>
+          <label>Sichtfeld (FOV) <span id="setting-fov-value" class="val"></span>
+            <input id="setting-fov" type="range" min="60" max="110" step="1">
+          </label>
+          <label>Maus-/Blickempfindlichkeit <span id="setting-sensitivity-value" class="val"></span>
+            <input id="setting-sensitivity" type="range" min="0.0008" max="0.009" step="0.0002">
+          </label>
+          <label>Lautstärke <span id="setting-volume-value" class="val"></span>
+            <input id="setting-volume" type="range" min="0" max="1" step="0.05">
+          </label>
+          <label>Tageslänge <span id="setting-day-length-value" class="val"></span>
+            <input id="setting-day-length" type="range" min="0" max="1800" step="60">
+          </label>
+          <label>Partikel
+            <select id="setting-particles">
+              <option value="high">Viel</option>
+              <option value="low">Wenig</option>
+            </select>
+          </label>
+          <label class="check-label">
+            <input id="setting-invert-y" type="checkbox"> Y-Achse invertieren
+          </label>
+          <label class="check-label">
+            <input id="setting-debug" type="checkbox"> Debug-Infos anzeigen (F3)
+          </label>
+          <label class="check-label">
+            <input id="setting-autosave" type="checkbox" checked> Automatisch speichern
+          </label>
+        </div>
+        <div class="menu-buttons-col">
+          <button id="btn-settings-back" class="menu-btn primary">← Zurück</button>
+          <button id="btn-reset-world" class="menu-btn danger">⚠ Welt zurücksetzen (neu generieren)</button>
+          <button id="btn-delete-save" class="menu-btn danger">🗑 Gespeicherte Welt löschen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inventar -->
+    <div id="inventory-screen" class="screen">
+      <div class="menu-panel wide inv-panel">
+        <div class="inv-header">
+          <h2>Inventar & Crafting</h2>
+          <button id="btn-close-inventory" class="menu-btn small-btn">✕ Schließen (E)</button>
+        </div>
+        <div id="inventory-body"></div>
+      </div>
+    </div>
+
+    <!-- Tod -->
+    <div id="death-screen" class="screen">
+      <div class="menu-panel death-panel">
+        <h2 class="death-title">Du bist gestorben!</h2>
+        <p id="death-stats"></p>
+        <button id="btn-respawn" class="menu-btn primary">↻ Wiederbeleben</button>
+      </div>
+    </div>
+
+    <!-- Hilfe -->
+    <div id="help-screen" class="screen">
+      <div class="menu-panel wide">
+        <h2>Steuerung & Hilfe</h2>
+        <div id="help-content"></div>
+        <button id="btn-help-back" class="menu-btn primary">← Zurück</button>
+      </div>
+    </div>
+
+    <!-- Laden -->
+    <div id="loading-screen" class="screen">
+      <div class="menu-panel">
+        <h2 id="loading-text">Welt wird generiert…</h2>
+        <div class="loading-bar"><div class="loading-fill"></div></div>
+        <p class="hint">Chunks, Höhlen, Bäume und mehr entstehen gerade prozedural.</p>
+      </div>
+    </div>
+
+    <!-- Selbstdiagnose -->
+    <div id="selftest-screen" class="screen">
+      <div class="menu-panel wide">
+        <h2>Selbstdiagnose</h2>
+        <div id="selftest-results"><p>Diagnose läuft…</p></div>
+        <button id="btn-selftest-back" class="menu-btn primary">← Zurück</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

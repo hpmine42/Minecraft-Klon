@@ -1,0 +1,125 @@
+// Schnelltest der Weltmodule (ohne Browser).
+import { PerlinNoise, mulberry32, hashSeed, coordHash } from '../src/world/noise.js';
+import { BLOCKS, BLOCK, breakSpeed, getDrop, TOOL, isSolid } from '../src/world/blocks.js';
+import { generateAtlasData, ATLAS_SIZE } from '../src/world/textures.js';
+import { World } from '../src/world/world.js';
+import { CHUNK_SIZE, CHUNK_HEIGHT, blockIndex } from '../src/world/chunk.js';
+import { BIOME_NAMES } from '../src/world/worldgen.js';
+
+let passed = 0;
+let failed = 0;
+function ok(cond, msg) {
+  if (cond) { passed++; }
+  else { failed++; console.error('FEHL:', msg); }
+}
+
+// Noise
+const n = new PerlinNoise(42);
+const v = n.noise2D(1.5, 2.5);
+ok(Number.isFinite(v) && v >= -1.2 && v <= 1.2, `noise2D Bereich: ${v}`);
+const v3 = n.noise3D(1.5, 2.5, 3.5);
+ok(Number.isFinite(v3), 'noise3D finite');
+ok(Math.abs(n.fbm2D(0.1, 0.2, 4)) <= 1.2, 'fbm2D Bereich');
+ok(mulberry32(5)() !== mulberry32(6)(), 'RNG seed-sensitiv');
+ok(hashSeed('abc') === hashSeed('abc'), 'hashSeed stabil');
+ok(coordHash(1, 2, 3, 9) === coordHash(1, 2, 3, 9), 'coordHash stabil');
+
+// Blöcke
+ok(BLOCKS[BLOCK.STONE].name === 'Stein', 'Blockname');
+ok(isSolid(BLOCK.STONE) === true, 'Stein solid');
+ok(isSolid(BLOCK.WATER) === false, 'Wasser nicht solid');
+ok(breakSpeed(BLOCK.STONE, null) > 0, 'breakSpeed Stein');
+ok(breakSpeed(BLOCK.STONE, BLOCK.DIAMOND_PICKAXE) > breakSpeed(BLOCK.STONE, BLOCK.WOOD_PICKAXE), 'Diamant schneller als Holz');
+ok(breakSpeed(BLOCK.STONE, BLOCK.WOOD_SWORD) <= breakSpeed(BLOCK.STONE, null) * 1.01, 'Schwert nicht schneller');
+ok(breakSpeed(BLOCK.BEDROCK, BLOCK.DIAMOND_PICKAXE) === 0, 'Bedrock unzerstörbar');
+const drop = getDrop(BLOCK.STONE, BLOCK.WOOD_PICKAXE);
+ok(drop && drop.id === BLOCK.COBBLESTONE, 'Stein droppt Bruchstein');
+ok(getDrop(BLOCK.DIAMOND_ORE, null) === null, 'Diamant ohne Pickaxe kein Drop');
+ok(getDrop(BLOCK.DIAMOND_ORE, BLOCK.IRON_PICKAXE) !== null, 'Diamant mit Eisen-Pickaxe Drop');
+ok(getDrop(BLOCK.DIAMOND_ORE, BLOCK.WOOD_PICKAXE) === null, 'Diamant mit Holz-Pickaxe kein Drop');
+ok(getDrop(BLOCK.GRASS, BLOCK.DIAMOND_PICKAXE)?.id === BLOCK.DIRT, 'Gras droppt Erde');
+
+// Jeder Block hat gültige Kacheln
+for (const b of Object.values(BLOCKS)) {
+  if (b.render === 'item') {
+    ok(Array.isArray(b.tiles) && b.tiles.length === 1 && b.tiles[0] >= 0, `Item-Tiles ${b.name}`);
+  } else if (b.id !== BLOCK.AIR) {
+    ok(Array.isArray(b.tiles) && b.tiles.length === 3 && b.tiles.every((t) => t >= 0 && t < 256), `Block-Tiles ${b.name}`);
+  }
+}
+
+// Atlas
+const atlas = generateAtlasData(1337);
+ok(atlas.size === ATLAS_SIZE, 'Atlas-Größe');
+ok(atlas.pixels.length === ATLAS_SIZE * ATLAS_SIZE * 4, 'Atlas-Pixel');
+ok(atlas.pixels.some((x) => x > 0), 'Atlas hat Inhalt');
+
+// Welt
+const world = new World(12345, 'normal', {});
+world.generateChunk(0, 0);
+const chunk = world.getChunk(0, 0);
+ok(chunk && chunk.generated, 'Chunk generiert');
+ok(chunk.blocks.some((b) => b !== 0), 'Chunk hat Blöcke');
+
+// Bedrock bei y=0
+ok(chunk.blocks[blockIndex(0, 0, 0)] === BLOCK.BEDROCK, 'Bedrock unten');
+
+// Höhe plausibel: über der Höhe ist Luft oder Wasser, darunter meist Stein/Erde
+let solidFound = 0;
+for (let y = 1; y < CHUNK_HEIGHT; y++) {
+  const b = chunk.blocks[blockIndex(8, y, 8)];
+  if (b === BLOCK.STONE || b === BLOCK.DIRT || b === BLOCK.GRASS || b === BLOCK.SAND) solidFound++;
+}
+ok(solidFound > 3, `Terrainfüllung (${solidFound})`);
+
+// Licht berechnet
+ok(chunk.skyLight[blockIndex(8, CHUNK_HEIGHT - 1, 8)] === 15, 'Himmelslicht oben');
+ok(chunk.skyLight[blockIndex(0, 0, 0)] === 0, 'Kein Licht im Bedrock');
+
+// setBlock / modified
+world.setBlock(5, 40, 5, BLOCK.TORCH);
+ok(world.getBlock(5, 40, 5) === BLOCK.TORCH, 'setBlock/getBlock');
+ok(world.modified.has('5,40,5'), 'Änderung gespeichert');
+ok(world.getBlockLight(5, 40, 5) === 14, `Fackel-Licht (${world.getBlockLight(5, 40, 5)})`);
+
+// Raycast
+const ray = world.raycast({ x: 8.5, y: 60, z: 8.5 }, { x: 0, y: -1, z: 0 }, 40);
+ok(ray !== null, 'Raycast trifft Boden');
+ok(ray && ray.ny === 1, `Raycast Normal zeigt hoch (${ray && ray.ny})`);
+ok(ray && ray.distance > 0 && ray.distance < 40, `Raycast Distanz (${ray && ray.distance})`);
+
+// Weite Welt generieren (verschiedene Biome finden)
+const biomesFound = new Set();
+for (let i = 0; i < 40; i++) {
+  const x = i * 37 - 200;
+  const z = (i * 53) % 300 - 150;
+  const b = world.gen.biomeAt(x, z);
+  biomesFound.add(b);
+}
+ok(biomesFound.size >= 3, `Mehrere Biome gefunden: ${[...biomesFound].map((b) => BIOME_NAMES[b]).join(', ')}`);
+
+// Flat-Welt
+const flat = new World(999, 'flat', {});
+flat.generateChunk(0, 0);
+const fc = flat.getChunk(0, 0);
+ok(fc.blocks[blockIndex(8, 32, 8)] === BLOCK.GRASS, 'Flat: Gras bei y=32');
+ok(fc.blocks[blockIndex(8, 33, 8)] === BLOCK.AIR, 'Flat: Luft darüber');
+
+// Chunkgrenzen konsistent
+world.generateChunk(1, 0);
+ok(world.getBlock(15, 10, 8) !== undefined, 'Block an Chunkgrenze');
+ok(world.getBlock(16, 10, 8) !== undefined, 'Block in Nachbarchunk');
+
+// Mesh-Build (nutzt three.js in Node)
+const built = world.update(8, 8, 1, 200);
+ok(built > 0, `Meshes gebaut (${built})`);
+const mesh = world.getChunk(0, 0).meshSolid;
+ok(mesh !== null || world.getChunk(0, 0).meshTransparent !== null, 'Mesh vorhanden');
+if (mesh) {
+  ok(mesh.geometry.attributes.position.count > 0, 'Mesh hat Vertices');
+  ok(mesh.geometry.attributes.color.count === mesh.geometry.attributes.position.count, 'Farbattribute passen');
+  ok(mesh.geometry.index.count % 3 === 0, 'Indizes durch 3 teilbar');
+}
+
+console.log(`\n${passed} bestanden, ${failed} fehlgeschlagen`);
+if (failed > 0) process.exit(1);

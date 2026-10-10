@@ -1,0 +1,25 @@
+{
+  "name": "minecraft-klon",
+  "version": "1.0.0",
+  "description": "Minecraft-Klon für Desktop und Handy – Browser-Voxel-Spiel mit Terrain, Mobs, Crafting, Tag/Nacht und mehr",
+  "main": "index.js",
+  "scripts": {
+    "test": "node tests/world.test.mjs && node tests/game.test.mjs && node tests/modules.test.mjs && node tests/boot.test.mjs && node tests/touch.test.mjs && node tests/dom-ids.test.mjs",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hpmine42/Minecraft-Klon.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hpmine42/Minecraft-Klon/issues"
+  },
+  "homepage": "https://github.com/hpmine42/Minecraft-Klon#readme",
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "type": "module"
+}
