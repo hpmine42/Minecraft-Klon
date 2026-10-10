@@ -1,0 +1,8 @@
+# Abhängigkeiten & Artefakte
+node_modules/
+npm-debug.log*
+
+# Temporäre Dateien
+*.log
+.DS_Store
+tmp/
