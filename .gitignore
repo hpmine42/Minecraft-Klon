@@ -2,6 +2,9 @@
 node_modules/
 npm-debug.log*
 
+# Build-Artefakte (GitHub Pages)
+_site/
+
 # Temporäre Dateien
 *.log
 .DS_Store

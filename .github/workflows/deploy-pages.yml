@@ -1,0 +1,80 @@
+# Deployt den Minecraft-Klon als statische Seite nach GitHub Pages.
+# - Bei Pull Requests: nur die Tests
+# - Bei Push auf main / manuellem Start: Tests + Deployment
+name: GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Nicht zwei Deployments gleichzeitig
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ------------------------------------------------------------------
+  # 1) Automatisierte Tests (271 Prüfungen: Welt, Spiel, Module, Boot,
+  #    Handy-Boot, Touch, DOM) – ohne Browser lauffähig
+  # ------------------------------------------------------------------
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Tests ausführen
+        run: npm test
+
+  # ------------------------------------------------------------------
+  # 2) Statische Dateien nach GitHub Pages deployen (nur main)
+  # ------------------------------------------------------------------
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Seiten-Dateien zusammenstellen
+        run: |
+          mkdir -p _site
+          cp index.html styles.css README.md _site/
+          cp -r lib src _site/
+          # Jekyll deaktivieren (verarbeitet sonst Dateien)
+          touch _site/.nojekyll
+
+      - name: GitHub Pages konfigurieren
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Artifact hochladen
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Nach GitHub Pages deployen
+        id: deployment
+        uses: actions/deploy-pages@v4
