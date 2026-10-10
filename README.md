@@ -111,13 +111,16 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 npm test
 ```
 
-Enthalten (250+ Prüfungen, komplett ohne Browser lauffähig):
+Enthalten (270+ Prüfungen, komplett ohne Browser lauffähig):
 - **Welttests**: Noise, Blöcke, Drops, Atlas, Terrain, Licht, Raycast, Biome, Meshes
 - **Spieltests**: Inventar, Crafting-Rezepte, Physik (Laufen, Springen, Kollision,
   Fallschaden, Schwimmen), Hunger, Kämpfe, Serialisierung, Speicherstände
 - **Modul-Test**: alle 21 Module importierbar (Syntax & Pfade)
-- **Boot-Smoke-Test**: kompletter Spielstart mit Stub-DOM – Weltgenerierung,
-  Rendering-Pipeline, Pause/Inventar/Speichern/Laden
+- **Boot-Smoke-Test (Desktop)**: kompletter Spielstart mit Stub-DOM – Weltgenerierung,
+  Rendering-Pipeline, Block abbauen/platzieren, Pause/Inventar/Speichern/Laden
+- **Boot-Smoke-Test (Handy)**: Spielstart im Touch-Modus – Joystick bewegt den Spieler,
+  Wischen dreht den Blick, Sprung-/Doppelsprung-/Platzier-Buttons, Inventar & Menü,
+  mobile Renderdistanz & Pixel-Ratio
 - **Touch-Test**: Joystick-Mathematik, Look-Drag, Buttons, Doppelsprung,
   Touch/Maus-Doppel-Events
 - **DOM-Test**: alle HTML-IDs stimmen mit dem Code überein
