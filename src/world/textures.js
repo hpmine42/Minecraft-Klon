@@ -24,6 +24,11 @@ function makeTilePainter(tileIndex, seed) {
       }
       return this;
     },
+    /** Kachel vollständig transparent machen (für Pflanzen, Glas, Items). */
+    clear() {
+      data.fill(0);
+      return this;
+    },
     set(x, y, r, g, b, a = 255) {
       if (x < 0 || y < 0 || x >= TILE_SIZE || y >= TILE_SIZE) return;
       const i = (y * TILE_SIZE + x) * 4;
@@ -277,14 +282,12 @@ export function generateAtlasData(seed = 1337) {
     }
     drawTile(24, p);
   }
-  // 25 Eichenlaub
+  // 25 Eichenlaub (undurchsichtig wie Minecraft "schnelle Grafik")
   {
     const p = tile(25);
-    p.fill(60, 128, 48, 14);
-    p.speckle(30, 42, 100, 36);
-    p.speckle(18, 88, 158, 66);
-    // Lücken für Transparenz
-    for (let i = 0; i < 6; i++) p.set(Math.floor(p.rand() * 16), Math.floor(p.rand() * 16), 0, 0, 0, 0);
+    p.fill(56, 122, 46, 16);
+    p.speckle(30, 40, 96, 34);
+    p.speckle(18, 84, 152, 62);
     drawTile(25, p);
   }
   // 26 Birkenstamm-Seite
@@ -306,10 +309,9 @@ export function generateAtlasData(seed = 1337) {
   // 28 Birkenlaub
   {
     const p = tile(28);
-    p.fill(88, 148, 62, 14);
-    p.speckle(26, 66, 120, 46);
-    p.speckle(16, 110, 170, 80);
-    for (let i = 0; i < 5; i++) p.set(Math.floor(p.rand() * 16), Math.floor(p.rand() * 16), 0, 0, 0, 0);
+    p.fill(84, 142, 58, 16);
+    p.speckle(26, 62, 116, 44);
+    p.speckle(16, 106, 166, 76);
     drawTile(28, p);
   }
   // 29 Fichtenstamm-Seite
@@ -328,10 +330,9 @@ export function generateAtlasData(seed = 1337) {
   // 31 Fichtenlaub
   {
     const p = tile(31);
-    p.fill(42, 92, 52, 14);
-    p.speckle(28, 30, 70, 40);
-    p.speckle(14, 62, 118, 68);
-    for (let i = 0; i < 5; i++) p.set(Math.floor(p.rand() * 16), Math.floor(p.rand() * 16), 0, 0, 0, 0);
+    p.fill(40, 88, 50, 16);
+    p.speckle(28, 28, 66, 38);
+    p.speckle(14, 60, 114, 64);
     drawTile(31, p);
   }
   // 32 Bretter
@@ -347,7 +348,7 @@ export function generateAtlasData(seed = 1337) {
   // 33 Setzling
   {
     const p = tile(33);
-    p.fill(0, 0, 0, 0);
+    p.clear();
     p.rect(7, 8, 2, 7, 110, 82, 48);
     p.rect(4, 5, 3, 2, 62, 130, 52);
     p.rect(9, 4, 3, 2, 72, 148, 62);
@@ -372,7 +373,7 @@ export function generateAtlasData(seed = 1337) {
   // 35 Roter Mohn
   {
     const p = tile(35);
-    p.fill(0, 0, 0, 0);
+    p.clear();
     p.rect(7, 8, 2, 7, 52, 120, 44);
     p.rect(5, 3, 6, 5, 210, 48, 42);
     p.set(7, 5, 240, 90, 80); p.set(8, 4, 240, 90, 80);
@@ -382,7 +383,7 @@ export function generateAtlasData(seed = 1337) {
   // 36 Gelbe Blume
   {
     const p = tile(36);
-    p.fill(0, 0, 0, 0);
+    p.clear();
     p.rect(7, 8, 2, 7, 52, 120, 44);
     p.rect(5, 3, 6, 5, 230, 210, 60);
     p.set(7, 5, 200, 160, 40);
@@ -391,7 +392,7 @@ export function generateAtlasData(seed = 1337) {
   // 37 Hohes Gras
   {
     const p = tile(37);
-    p.fill(0, 0, 0, 0);
+    p.clear();
     for (let x = 2; x < 15; x += 2) {
       const h = 6 + Math.floor(p.rand() * 8);
       const c = 60 + p.rand() * 40;
@@ -402,7 +403,7 @@ export function generateAtlasData(seed = 1337) {
   // 38 Roter Pilz
   {
     const p = tile(38);
-    p.fill(0, 0, 0, 0);
+    p.clear();
     p.rect(7, 8, 2, 6, 230, 226, 210);
     p.rect(4, 5, 8, 4, 200, 52, 46);
     p.set(6, 6, 240, 240, 236); p.set(10, 6, 240, 240, 236);
@@ -411,7 +412,7 @@ export function generateAtlasData(seed = 1337) {
   // 39 (Platzhalter – alte Weizenstufe)
   {
     const p = tile(39);
-    p.fill(0, 0, 0, 0);
+    p.clear();
     drawTile(39, p);
   }
   // 40/41 Kaktus
@@ -433,7 +434,7 @@ export function generateAtlasData(seed = 1337) {
   // 42 Zuckerrohr
   {
     const p = tile(42);
-    p.fill(0, 0, 0, 0);
+    p.clear();
     for (let x = 5; x < 11; x++) {
       for (let y = 0; y < 16; y++) {
         const v = y % 5 === 0 ? 20 : 0;
@@ -445,7 +446,7 @@ export function generateAtlasData(seed = 1337) {
   // 43 Glas
   {
     const p = tile(43);
-    p.fill(210, 230, 240, 0);
+    p.clear();
     for (let i = 0; i < 16; i++) {
       p.set(i, 0, 235, 245, 250); p.set(i, 15, 235, 245, 250);
       p.set(0, i, 235, 245, 250); p.set(15, i, 235, 245, 250);
@@ -518,7 +519,7 @@ export function generateAtlasData(seed = 1337) {
   // 50 Leiter
   {
     const p = tile(50);
-    p.fill(0, 0, 0, 0);
+    p.clear();
     p.rect(2, 0, 2, 16, 150, 118, 70);
     p.rect(12, 0, 2, 16, 150, 118, 70);
     for (let y = 2; y < 16; y += 4) p.rect(2, y, 12, 1, 170, 138, 84);
@@ -527,7 +528,7 @@ export function generateAtlasData(seed = 1337) {
   // 51 Fackel
   {
     const p = tile(51);
-    p.fill(0, 0, 0, 0);
+    p.clear();
     p.rect(7, 6, 2, 10, 150, 112, 62);
     p.rect(6, 3, 4, 4, 250, 190, 60);
     p.set(7, 2, 255, 240, 140); p.set(8, 2, 255, 240, 140);
@@ -575,7 +576,7 @@ export function generateAtlasData(seed = 1337) {
   // ---- Items (16x16 Icons) -------------------------------------------------
   const itemIcon = (index, fn) => {
     const p = tile(index);
-    p.fill(0, 0, 0, 0);
+    p.clear();
     fn(p);
     drawTile(index, p);
   };
@@ -767,7 +768,7 @@ export function generateAtlasData(seed = 1337) {
     ];
     stages.forEach((st, si) => {
       const p = tile(93 + si);
-      p.fill(0, 0, 0, 0);
+      p.clear();
       for (let x = 2; x < 15; x += 3) {
         for (let y = 16 - st.h; y < 16; y++) {
           const t = (y / 16) * 0.3;

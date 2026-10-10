@@ -149,11 +149,10 @@ globalThis.localStorage = {
   removeItem(k) { delete this._data[k]; },
 };
 globalThis.confirm = () => true;
-let rafCount = 0;
+let rafRunning = true;
 globalThis.requestAnimationFrame = (fn) => {
-  rafCount++;
-  if (rafCount > 300) return 0;
-  return setTimeout(() => fn(performance.now()), 4);
+  if (!rafRunning) return 0;
+  return setTimeout(() => { if (rafRunning) fn(performance.now()); }, 4);
 };
 globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
 
@@ -221,6 +220,9 @@ jumpBtn.dispatch('touchend', makeEvent([{ identifier: 4, clientX: 10, clientY: 1
 await new Promise((r) => setTimeout(r, 30));
 jumpBtn.dispatch('touchstart', makeEvent([{ identifier: 5, clientX: 10, clientY: 10 }]));
 ok(game.player.flying === true, 'Doppelsprung schaltet Fliegen an');
+jumpBtn.dispatch('touchend', makeEvent([{ identifier: 5, clientX: 10, clientY: 10 }]));
+game.player.flying = true; // Im Kreativflug bleibt die Testposition stabil.
+game.player.velocity.x = game.player.velocity.y = game.player.velocity.z = 0;
 
 // Platzieren-Button (Block in der Welt)
 const placeBtn = elById('btn-place');
@@ -231,6 +233,36 @@ placeBtn.dispatch('touchstart', makeEvent([{ identifier: 6, clientX: 10, clientY
 placeBtn.dispatch('touchend', makeEvent([{ identifier: 6, clientX: 10, clientY: 10 }]));
 await new Promise((r) => setTimeout(r, 60));
 ok(true, 'Platzieren-Button ohne Fehler');
+
+// Mobile Pocket-Edition-Stil: ruhiger Long-Press auf eine Pflanze baut sie ab
+// (Touchposition wird auf einen Bildschirm-Strahl projiziert, nicht nur aufs Fadenkreuz).
+game.player.yaw = 0;
+game.player.pitch = 0;
+const eye = game.player.eyePosition();
+const targetBlock = {
+  x: Math.floor(game.player.position.x),
+  y: Math.floor(eye.y),
+  z: Math.floor(game.player.position.z) - 3,
+};
+game.world.setBlock(targetBlock.x, targetBlock.y, targetBlock.z, BLOCK.FLOWER_RED);
+const directRay = game.world.raycast(eye, game.player.lookDir(), 5.2);
+ok(directRay?.id === BLOCK.FLOWER_RED, 'Testblume liegt im Blickfeld');
+const raycastMob = game.mobs.raycastMob;
+game.mobs.raycastMob = () => null; // deterministisch auf den Block fokussieren
+const interactionUpdate = game.interaction.update.bind(game.interaction);
+let mineFrames = 0;
+game.interaction.update = (dt, actions, camera) => {
+  if (actions.attack && actions.attackDirection) mineFrames++;
+  return interactionUpdate(dt, actions, camera);
+};
+lookZone.dispatch('touchstart', makeEvent([{ identifier: 12, clientX: 195, clientY: 422 }]));
+await new Promise((r) => setTimeout(r, 420));
+lookZone.dispatch('touchend', makeEvent([{ identifier: 12, clientX: 195, clientY: 422 }]));
+game.mobs.raycastMob = raycastMob;
+game.interaction.update = interactionUpdate;
+ok(mineFrames > 0, 'Mobile-Long-Press wird im Spiel als gehaltener Abbau verarbeitet');
+ok(game.world.getBlock(targetBlock.x, targetBlock.y, targetBlock.z) === BLOCK.AIR,
+  'Gedrückthalten auf dem Block baut ihn direkt ab');
 
 // Inventar-Button öffnet Inventar
 const invBtn = elById('btn-inventory');
@@ -249,5 +281,6 @@ ok(game.state === 'playing', 'Menü-Button kehrt zurück');
 // Pixel-Ratio für Handy begrenzt
 ok(game.engine.pixelRatio <= 1.75, `Pixel-Ratio gedrosselt (${game.engine.pixelRatio})`);
 
+rafRunning = false;
 console.log(`\n${passed} bestanden, ${failed} fehlgeschlagen`);
 process.exit(failed > 0 ? 1 : 0);

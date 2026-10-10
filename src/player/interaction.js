@@ -47,7 +47,9 @@ export class Interaction {
     this.swingTime = Math.max(0, this.swingTime - dt);
 
     const eye = this.player.eyePosition();
-    const dir = this.player.lookDir();
+    // Mobile Long-Presses können einen eigenen Bildschirm-Strahl übergeben;
+    // Maus/Attack-Button verwenden weiterhin das Fadenkreuz.
+    const dir = actions.attackDirection || this.player.lookDir();
 
     // Ziel: Mob zuerst
     const mobHit = this.mobs.raycastMob(eye, dir, 4.2);

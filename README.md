@@ -55,7 +55,8 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 - 🏗️ **Welttypen**: Normal (Berge/Höhlen) und Flach (Bauwelt)
 
 ### Technik & Bedienung
-- 📱 **Vollständige Touch-Steuerung**: virtueller Joystick, Blick-Wischen, Buttons
+- 📱 **Vollständige Touch-Steuerung**: virtueller Joystick, Blick-Wischen,
+  Pocket-Edition-Long-Press (Block direkt unter dem Finger abbauen) plus Buttons
   (Springen, Schleichen, Fliegen, Abbauen, Platzieren, Inventar, Menü)
 - 🖥️ **Desktop-Steuerung**: WASD, Maus mit Pointer-Lock, Tastenkürzel (siehe Hilfe)
 - 🔊 **Prozedurale Sounds** (WebAudio) – ohne Audiodateien: Abbauen, Schritte,
@@ -95,7 +96,8 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 | Bedienelement | Funktion |
 |---|---|
 | Linker Daumen (Joystick) | Bewegen (voll = Sprint) |
-| Rechte Bildschirmhälfte (Wischen) | Umsehen |
+| Auf Block tippen & halten | Block direkt unter dem Finger abbauen (wie Pocket Edition) |
+| Wischen | Umsehen; Wischbewegungen bauen nicht ab |
 | ⬆ | Springen · **2× tippen = Fliegen** |
 | ⬇ | Schleichen (Umschalter) |
 | 🕊 | Fliegen an/aus |
@@ -111,7 +113,7 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 npm test
 ```
 
-Enthalten (270+ Prüfungen, komplett ohne Browser lauffähig):
+Enthalten (294 Prüfungen, komplett ohne Browser lauffähig):
 - **Welttests**: Noise, Blöcke, Drops, Atlas, Terrain, Licht, Raycast, Biome, Meshes
 - **Spieltests**: Inventar, Crafting-Rezepte, Physik (Laufen, Springen, Kollision,
   Fallschaden, Schwimmen), Hunger, Kämpfe, Serialisierung, Speicherstände
@@ -119,10 +121,10 @@ Enthalten (270+ Prüfungen, komplett ohne Browser lauffähig):
 - **Boot-Smoke-Test (Desktop)**: kompletter Spielstart mit Stub-DOM – Weltgenerierung,
   Rendering-Pipeline, Block abbauen/platzieren, Pause/Inventar/Speichern/Laden
 - **Boot-Smoke-Test (Handy)**: Spielstart im Touch-Modus – Joystick bewegt den Spieler,
-  Wischen dreht den Blick, Sprung-/Doppelsprung-/Platzier-Buttons, Inventar & Menü,
-  mobile Renderdistanz & Pixel-Ratio
-- **Touch-Test**: Joystick-Mathematik, Look-Drag, Buttons, Doppelsprung,
-  Touch/Maus-Doppel-Events
+  Wischen dreht den Blick, ruhiger Long-Press baut den direkt berührten Block ab,
+  Sprung-/Doppelsprung-/Platzier-Buttons, Inventar & Menü, mobile Renderdistanz & Pixel-Ratio
+- **Touch-Test**: Joystick-Mathematik, Look-Drag, Bildschirm-Strahl, Long-Press,
+  Buttons, Doppelsprung und Touch/Maus-Doppel-Events
 - **DOM-Test**: alle HTML-IDs stimmen mit dem Code überein
 
 ## 📱 Hinweise fürs Handy

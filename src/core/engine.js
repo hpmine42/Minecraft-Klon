@@ -2,6 +2,23 @@
 import * as THREE from '../../lib/three.module.js';
 import { createWaterTexture, createLavaTexture } from '../world/textures.js';
 
+const SKY_PALETTE = {
+  dayTop: new THREE.Color(0x3879d8),
+  dayBottom: new THREE.Color(0x829fca),
+  dayHorizon: new THREE.Color(0xc0e4ff),
+  nightTop: new THREE.Color(0x030713),
+  nightBottom: new THREE.Color(0x090e1c),
+  nightHorizon: new THREE.Color(0x17233c),
+  duskTop: new THREE.Color(0x523883),
+  duskBottom: new THREE.Color(0x542f4e),
+  duskHorizon: new THREE.Color(0xffa06a),
+  rainGray: new THREE.Color(0x5a6a7a),
+  cloudNight: new THREE.Color(0x25324b),
+  cloudDay: new THREE.Color(0xffffff),
+  cloudDusk: new THREE.Color(0xffb39a),
+  cloudRain: new THREE.Color(0x737d8a),
+};
+
 export class Engine {
   constructor(canvas, opts = {}) {
     this.canvas = canvas;
@@ -30,9 +47,8 @@ export class Engine {
     // ---- Himmel (Gradient-Dome) -------------------------------------------
     this.skyUniforms = {
       topColor: { value: new THREE.Color(0x3a7bd5) },
-      bottomColor: { value: new THREE.Color(0x9fd3ff) },
-      offset: { value: 24 },
-      exponent: { value: 0.7 },
+      bottomColor: { value: new THREE.Color(0x10182b) },
+      horizonColor: { value: new THREE.Color(0xb8dcff) },
     };
     const skyGeom = new THREE.SphereGeometry(400, 24, 16);
     const skyMat = new THREE.ShaderMaterial({
@@ -51,13 +67,21 @@ export class Engine {
       fragmentShader: `
         uniform vec3 topColor;
         uniform vec3 bottomColor;
-        uniform float offset;
-        uniform float exponent;
+        uniform vec3 horizonColor;
         varying vec3 vWorldPosition;
         void main() {
-          float h = normalize(vWorldPosition + vec3(0.0, offset, 0.0)).y;
-          float t = max(pow(max(h, 0.0), exponent), 0.0);
-          gl_FragColor = vec4(mix(bottomColor, topColor, t), 1.0);
+          // Direction relativ zur Kamera: Der Himmel bleibt stabil, auch wenn
+          // der Spieler weit vom Weltursprung entfernt ist.
+          float h = normalize(vWorldPosition - cameraPosition).y;
+          float upper = smoothstep(-0.04, 0.64, h);
+          vec3 skyColor = mix(horizonColor, topColor, upper);
+          float belowHorizon = 1.0 - smoothstep(-0.3, -0.02, h);
+          skyColor = mix(skyColor, bottomColor * 0.7, belowHorizon);
+          float horizonHaze = exp(-abs(h + 0.01) * 17.0) * 0.28;
+          skyColor = mix(skyColor, horizonColor, horizonHaze);
+          gl_FragColor = vec4(skyColor, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
         }
       `,
     });
@@ -65,14 +89,20 @@ export class Engine {
     this.sky.frustumCulled = false;
     this.scene.add(this.sky);
 
-    // ---- Sonne & Mond ------------------------------------------------------
+    // ---- Sonne & Mond (mit Glühen, prozedurale Texturen) --------------------
     this.sun = new THREE.Mesh(
-      new THREE.PlaneGeometry(36, 36),
-      new THREE.MeshBasicMaterial({ color: 0xfff7c0, fog: false, transparent: true, depthWrite: false })
+      new THREE.PlaneGeometry(70, 70),
+      new THREE.MeshBasicMaterial({
+        map: this._makeSunTexture(),
+        fog: false, transparent: true, depthWrite: false,
+      })
     );
     this.moon = new THREE.Mesh(
-      new THREE.PlaneGeometry(22, 22),
-      new THREE.MeshBasicMaterial({ color: 0xdfe6ff, fog: false, transparent: true, depthWrite: false })
+      new THREE.PlaneGeometry(44, 44),
+      new THREE.MeshBasicMaterial({
+        map: this._makeMoonTexture(),
+        fog: false, transparent: true, depthWrite: false,
+      })
     );
     this.scene.add(this.sun, this.moon);
 
@@ -106,14 +136,14 @@ export class Engine {
     this.cloudMaterial = new THREE.MeshBasicMaterial({
       map: this.cloudTexture,
       transparent: true,
-      opacity: 0.75,
+      opacity: 0.82,
       depthWrite: false,
       fog: true,
       side: THREE.DoubleSide,
     });
-    this.clouds = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), this.cloudMaterial);
+    this.clouds = new THREE.Mesh(new THREE.PlaneGeometry(2600, 2600), this.cloudMaterial);
     this.clouds.rotation.x = -Math.PI / 2;
-    this.clouds.position.y = 96;
+    this.clouds.position.y = 112;
     this.scene.add(this.clouds);
 
     // ---- Licht (für Lambert-Materialien: Mobs/Items) ------------------------
@@ -148,11 +178,59 @@ export class Engine {
     this.timeOfDay = 0.25;  // 0 = Sonnenaufgang, 0.25 = Mittag, 0.5 = Sonnenuntergang, 0.75 = Mitternacht
     this.underwater = false;
     this._animTime = 0;
+    this.dayFactor = 1;
+    this._skyScratch = {
+      top: new THREE.Color(),
+      bottom: new THREE.Color(),
+      horizon: new THREE.Color(),
+      cloud: new THREE.Color(),
+    };
+    this._tintables = [];
 
     window.addEventListener('resize', () => this.resize());
     this.resize();
   }
 
+  /** Prozedurale Sonnentextur: Kern + weicher Halo. */
+  _makeSunTexture() {
+    const s = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = s;
+    const ctx = canvas.getContext('2d');
+    const glow = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+    glow.addColorStop(0, 'rgba(255, 252, 224, 1)');
+    glow.addColorStop(0.28, 'rgba(255, 238, 160, 0.95)');
+    glow.addColorStop(0.55, 'rgba(255, 210, 110, 0.32)');
+    glow.addColorStop(1, 'rgba(255, 190, 90, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, s, s);
+    return new THREE.CanvasTexture(canvas);
+  }
+
+  /** Prozedurale Mondtextur: heller Kern + Krater + Halo. */
+  _makeMoonTexture() {
+    const s = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = s;
+    const ctx = canvas.getContext('2d');
+    const glow = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+    glow.addColorStop(0, 'rgba(238, 242, 255, 1)');
+    glow.addColorStop(0.32, 'rgba(212, 222, 255, 0.9)');
+    glow.addColorStop(0.55, 'rgba(180, 195, 245, 0.25)');
+    glow.addColorStop(1, 'rgba(160, 180, 240, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, s, s);
+    // Krater
+    ctx.fillStyle = 'rgba(150, 165, 210, 0.45)';
+    for (const [cx, cy, r] of [[52, 50, 9], [72, 68, 6], [58, 82, 5], [78, 46, 4]]) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    return new THREE.CanvasTexture(canvas);
+  }
+
+  /** Prozedurale Wolken-Textur: harte Wölkchen-Kacheln statt Weichzeichner-Schleier. */
   _makeCloudTexture() {
     const size = 256;
     const canvas = document.createElement('canvas');
@@ -160,21 +238,41 @@ export class Engine {
     canvas.height = size;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, size, size);
-    // Weiche Wolkenflecken
-    for (let i = 0; i < 60; i++) {
-      const x = Math.random() * size;
-      const y = Math.random() * size;
-      const r = 18 + Math.random() * 36;
-      const gradient = ctx.createRadialGradient(x, y, 0, x, y, r);
-      gradient.addColorStop(0, 'rgba(255,255,255,0.55)');
-      gradient.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    // Deterministische Wolkencluster aus harten Rechteck-Segmenten (Minecraft-Stil)
+    let seed = 777;
+    const rand = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+    const clusters = [];
+    for (let i = 0; i < 12; i++) {
+      clusters.push({
+        x: rand() * size,
+        y: rand() * size,
+        rx: 16 + rand() * 30,
+        ry: 8 + rand() * 16,
+      });
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    for (const cl of clusters) {
+      for (let i = 0; i < 7; i++) {
+        const ox = (rand() - 0.5) * cl.rx * 1.5;
+        const oy = (rand() - 0.5) * cl.ry * 1.3;
+        const w = Math.round(cl.rx * (0.35 + rand() * 0.55));
+        const h = Math.round(cl.ry * (0.4 + rand() * 0.6));
+        // Nahtlos kachelbar, auch an den Ecken
+        for (const dx of [-size, 0, size]) {
+          for (const dy of [-size, 0, size]) {
+            ctx.fillRect(Math.round(cl.x + ox - w / 2 + dx), Math.round(cl.y + oy - h / 2 + dy), w, h);
+          }
+        }
+      }
     }
     const tex = new THREE.CanvasTexture(canvas);
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(4, 4);
+    tex.magFilter = THREE.NearestFilter;
+    tex.repeat.set(5, 5);
     return tex;
   }
 
@@ -231,6 +329,15 @@ export class Engine {
   }
 
   /**
+   * Terrain-Material registrieren, das nachts abgedunkelt wird.
+   * @param {THREE.Material} mat
+   */
+  registerTintable(mat) {
+    if (mat && mat.color && !this._tintables.includes(mat)) this._tintables.push(mat);
+    return mat;
+  }
+
+  /**
    * Himmel & Beleuchtung an Tageszeit anpassen.
    * @param {number} timeOfDay 0..1
    * @param {number} renderDistance aktuelle Sichtweite (Chunks) für Nebel
@@ -240,38 +347,37 @@ export class Engine {
     this._animTime += dt;
 
     const t = timeOfDay;
-    // Sonnenwinkel: 0 = Osten (Aufgang), 0.25 = oben, 0.5 = Westen (Untergang)
-    const sunAngle = t * Math.PI * 2;
-    const sunY = Math.cos(sunAngle);      // 1 = Mittag, -1 = Mitternacht
+    // Zyklus: 0 = Aufgang, 0.25 = Mittag, 0.5 = Untergang, 0.75 = Mitternacht
+    const sunAngle = t * Math.PI * 2 - Math.PI / 2;
+    const sunY = Math.cos(sunAngle);
     const sunX = Math.sin(sunAngle);
 
     const dayFactor = Math.max(0, Math.min(1, (sunY + 0.18) / 0.5)); // 0 = Nacht, 1 = Tag
-    const duskFactor = Math.max(0, 1 - Math.abs(sunY) * 3.2);        // Sonnenuntergangs-Rot
+    const duskFactor = Math.max(0, 1 - Math.abs(sunY) * 2.4);        // breite Dämmerungs-Phase
+    this.dayFactor = dayFactor;
 
-    // Himmelsfarben
-    const dayTop = new THREE.Color(0x2f6fd4);
-    const dayBottom = new THREE.Color(0x9fd3ff);
-    const nightTop = new THREE.Color(0x060a1c);
-    const nightBottom = new THREE.Color(0x101c3a);
-    const duskTop = new THREE.Color(0x4a3a8c);
-    const duskBottom = new THREE.Color(0xff8c42);
-
-    const top = Engine.lerpColor(new THREE.Color(), nightTop, dayTop, dayFactor);
-    const bottom = Engine.lerpColor(new THREE.Color(), nightBottom, dayBottom, dayFactor);
+    // Himmelsfarben: satter Zenit, weiche Horizontfarbe, getrennte Dämmerung.
+    // Scratch-Color-Objekte vermeiden Speicherallokationen im mobilen Frame-Loop.
+    const { top, bottom, horizon, cloud } = this._skyScratch;
+    Engine.lerpColor(top, SKY_PALETTE.nightTop, SKY_PALETTE.dayTop, dayFactor);
+    Engine.lerpColor(bottom, SKY_PALETTE.nightBottom, SKY_PALETTE.dayBottom, dayFactor);
+    Engine.lerpColor(horizon, SKY_PALETTE.nightHorizon, SKY_PALETTE.dayHorizon, dayFactor);
     if (duskFactor > 0.02) {
-      top.lerp(duskTop, duskFactor * 0.55);
-      bottom.lerp(duskBottom, duskFactor * 0.75);
+      top.lerp(SKY_PALETTE.duskTop, duskFactor * 0.58);
+      bottom.lerp(SKY_PALETTE.duskBottom, duskFactor * 0.72);
+      horizon.lerp(SKY_PALETTE.duskHorizon, duskFactor * 0.88);
     }
     if (raining > 0) {
-      const rainGray = new THREE.Color(0x5a6a7a);
-      top.lerp(rainGray, raining * 0.55);
-      bottom.lerp(rainGray, raining * 0.45);
+      top.lerp(SKY_PALETTE.rainGray, raining * 0.55);
+      bottom.lerp(SKY_PALETTE.rainGray, raining * 0.45);
+      horizon.lerp(SKY_PALETTE.rainGray, raining * 0.52);
     }
     this.skyUniforms.topColor.value.copy(top);
     this.skyUniforms.bottomColor.value.copy(bottom);
+    this.skyUniforms.horizonColor.value.copy(horizon);
 
-    // Nebel + Hintergrund
-    this.fogColor.copy(bottom).lerp(top, 0.35);
+    // Nebel geht weich in die Horizontfarbe über – kein grauer Farbbruch.
+    this.fogColor.copy(horizon).lerp(top, 0.16);
     if (this.underwater) {
       this.fogColor.set(0x1a4a8c);
       this.scene.fog.near = 2;
@@ -282,8 +388,9 @@ export class Engine {
       this.scene.fog.far = Math.max(60, dist * 1.15);
     }
 
-    // Sonne & Mond positionieren (folgen der Kamera)
+    // Himmelobjekte folgen der Kamera, damit der Himmel in der Unendlichwelt stabil bleibt.
     const camPos = this.camera.position;
+    this.stars.position.copy(camPos);
     const skyR = 320;
     this.sun.position.set(camPos.x + sunX * skyR, camPos.y + sunY * skyR * 0.75 + 30, camPos.z - 60);
     this.sun.lookAt(camPos);
@@ -294,10 +401,23 @@ export class Engine {
     this.moon.material.opacity = Math.min(1, 1 - dayFactor + 0.15);
     this.starMaterial.opacity = Math.max(0, 1 - dayFactor * 1.6) * 0.95;
 
-    // Wolken bewegen
-    this.clouds.position.x = camPos.x + (this._animTime * 1.2) % 220;
+    // Wolken bewegen (Textur-Scroll statt Positions-Sprung – kein sichtbarer Kantensprung)
+    this.clouds.position.x = camPos.x;
     this.clouds.position.z = camPos.z;
-    this.cloudMaterial.opacity = 0.55 + (1 - dayFactor) * 0.12 + raining * 0.25;
+    this.cloudTexture.offset.x = (this._animTime * 0.0016) % 1;
+    this.cloudTexture.offset.y = (this._animTime * 0.0003) % 1;
+    this.cloudMaterial.opacity = 0.72 + (1 - dayFactor) * 0.06 + raining * 0.18;
+    Engine.lerpColor(cloud, SKY_PALETTE.cloudNight, SKY_PALETTE.cloudDay, dayFactor);
+    if (duskFactor > 0.02) cloud.lerp(SKY_PALETTE.cloudDusk, duskFactor * 0.48);
+    if (raining > 0) cloud.lerp(SKY_PALETTE.cloudRain, raining * 0.6);
+    this.cloudMaterial.color.copy(cloud);
+
+    // Nacht-Dunkelung der Terrain-Materialien (Basic-Materialien brauchen
+    // einen expliziten Tageszeit-Farbmultiplikator).
+    const night = 1 - dayFactor;
+    for (const m of this._tintables) {
+      m.color.setRGB(1 - night * 0.62, 1 - night * 0.58, 1 - night * 0.38);
+    }
 
     // Lichtfarben
     this.hemiLight.intensity = 0.25 + dayFactor * 0.85;
@@ -334,7 +454,7 @@ export class Engine {
 
   /** Gibt true wenn es taghell ist (für Mobs etc.). */
   isDay() {
-    const sunY = Math.cos(this.timeOfDay * Math.PI * 2);
+    const sunY = Math.sin(this.timeOfDay * Math.PI * 2);
     return sunY > -0.12;
   }
 

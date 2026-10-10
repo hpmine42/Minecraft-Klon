@@ -17,6 +17,28 @@ export function wasRecentTouch() {
   return (typeof performance !== 'undefined' ? performance.now() : Date.now()) - lastTouchTime < 700;
 }
 
+/** Bildschirmposition in einen Welt-Strahl für Touch-Interaktionen umrechnen. */
+export function screenRayDirection(player, point, width, height, fovDegrees = 75) {
+  const safeWidth = Math.max(1, width);
+  const safeHeight = Math.max(1, height);
+  const ndcX = (point.x / safeWidth) * 2 - 1;
+  const ndcY = 1 - (point.y / safeHeight) * 2;
+  const halfHeight = Math.tan((fovDegrees * Math.PI / 180) / 2);
+  const aspect = safeWidth / safeHeight;
+  const forward = player.lookDir();
+  const right = { x: Math.cos(player.yaw), y: 0, z: -Math.sin(player.yaw) };
+  const up = {
+    x: Math.sin(player.yaw) * Math.sin(player.pitch),
+    y: Math.cos(player.pitch),
+    z: Math.cos(player.yaw) * Math.sin(player.pitch),
+  };
+  const x = forward.x + right.x * ndcX * aspect * halfHeight + up.x * ndcY * halfHeight;
+  const y = forward.y + right.y * ndcX * aspect * halfHeight + up.y * ndcY * halfHeight;
+  const z = forward.z + right.z * ndcX * aspect * halfHeight + up.z * ndcY * halfHeight;
+  const length = Math.hypot(x, y, z) || 1;
+  return { x: x / length, y: y / length, z: z / length };
+}
+
 export class TouchControls {
   /**
    * @param {object} els DOM-Elemente
@@ -38,6 +60,11 @@ export class TouchControls {
     this.lookId = null;
     this.lookLast = { x: 0, y: 0 };
     this.lookDelta = { x: 0, y: 0 };
+    this.mineId = null;
+    this.mineStart = null;
+    this.mineMoved = false;
+    this.mineHoldDelay = opts.mineHoldDelay ?? 140;
+    this.mineMoveThreshold = opts.mineMoveThreshold ?? 18;
 
     // Buttons
     this.jump = false;
@@ -55,6 +82,31 @@ export class TouchControls {
     this._bindButtons();
   }
 
+  _startMineHold(touch) {
+    this.mineId = touch.identifier;
+    this.mineStart = {
+      x: touch.clientX,
+      y: touch.clientY,
+      startedAt: (typeof performance !== 'undefined' ? performance.now() : Date.now()),
+    };
+    this.mineMoved = false;
+  }
+
+  _moveMineHold(touch) {
+    if (this.mineId !== touch.identifier || !this.mineStart) return;
+    if (Math.hypot(touch.clientX - this.mineStart.x, touch.clientY - this.mineStart.y) > this.mineMoveThreshold) {
+      // Wischen bleibt reine Blick-/Bewegungssteuerung.
+      this.mineMoved = true;
+    }
+  }
+
+  _endMineHold(touch) {
+    if (this.mineId !== touch.identifier) return;
+    this.mineId = null;
+    this.mineStart = null;
+    this.mineMoved = false;
+  }
+
   _bindJoystick() {
     const el = this.els.joystickZone;
     if (!el) return;
@@ -66,6 +118,7 @@ export class TouchControls {
       markTouchEvent();
       const t = e.changedTouches[0];
       this.joyId = t.identifier;
+      this._startMineHold(t);
       const rect = el.getBoundingClientRect();
       this.joyOrigin = { x: t.clientX, y: t.clientY };
       this._joyRect = rect;
@@ -77,6 +130,7 @@ export class TouchControls {
       e.preventDefault();
       for (const t of e.changedTouches) {
         if (t.identifier !== this.joyId) continue;
+        this._moveMineHold(t);
         let dx = t.clientX - this.joyOrigin.x;
         let dy = t.clientY - this.joyOrigin.y;
         const len = Math.hypot(dx, dy);
@@ -92,6 +146,7 @@ export class TouchControls {
     const end = (e) => {
       for (const t of e.changedTouches) {
         if (t.identifier === this.joyId) {
+          this._endMineHold(t);
           this.joyId = null;
           this.joyValue = { x: 0, y: 0 };
           this._moveKnob(0, 0);
@@ -122,6 +177,7 @@ export class TouchControls {
       const t = e.changedTouches[0];
       this.lookId = t.identifier;
       this.lookLast = { x: t.clientX, y: t.clientY };
+      this._startMineHold(t);
     };
     const move = (e) => {
       if (this.lookId == null) return;
@@ -133,12 +189,14 @@ export class TouchControls {
         this.lookLast = { x: t.clientX, y: t.clientY };
         this.lookDelta.x += dx * this.sensitivity;
         this.lookDelta.y += dy * this.sensitivity;
+        this._moveMineHold(t);
       }
     };
     const end = (e) => {
       for (const t of e.changedTouches) {
         if (t.identifier === this.lookId) {
           this.lookId = null;
+          this._endMineHold(t);
         }
       }
     };
@@ -219,6 +277,16 @@ export class TouchControls {
     bind(this.els.btnCraft, () => this.onAction('craft'), null);
     bind(this.els.btnDebug, () => this.onAction('debug'), null);
     bind(this.els.btnChatless ?? null, () => this.onAction('cycleMode'), null);
+  }
+
+  /**
+   * Position eines ruhenden Long-Presses – analog zu „gedrückt halten, um abzubauen“.
+   * Beim Wischen wird nicht abgebaut, sondern wie gewohnt die Kamera gedreht.
+   */
+  minePoint(now = (typeof performance !== 'undefined' ? performance.now() : Date.now())) {
+    if (!this.enabled || this.mineId == null || !this.mineStart || this.mineMoved) return null;
+    if (now - this.mineStart.startedAt < this.mineHoldDelay) return null;
+    return { x: this.mineStart.x, y: this.mineStart.y };
   }
 
   /** Gleiche Form wie Input.movement(). */

@@ -2,7 +2,7 @@
 import * as THREE from '../lib/three.module.js';
 import { Engine } from './core/engine.js';
 import { Input } from './core/input.js';
-import { TouchControls, isTouchDevice } from './core/touch.js';
+import { TouchControls, isTouchDevice, screenRayDirection } from './core/touch.js';
 import { AudioEngine } from './core/audio.js';
 import { createAtlasCanvas, drawTileIcon } from './world/textures.js';
 import { World, SEA_LEVEL } from './world/world.js';
@@ -231,6 +231,10 @@ class Game {
       solid, transparent, fluidWater, fluidLava,
       scene: this.engine.scene,
     };
+    // Nacht-Dunkelung (Lava leuchtet von selbst → bleibt ungetönt)
+    this.engine.registerTintable(solid);
+    this.engine.registerTintable(transparent);
+    this.engine.registerTintable(fluidWater);
   }
 
   // =========================================================================
@@ -737,12 +741,17 @@ class Game {
       }
     }
 
+    const minePoint = this.isTouch ? this.touch.minePoint() : null;
+    const attackDirection = minePoint
+      ? screenRayDirection(player, minePoint, window.innerWidth, window.innerHeight, this.engine.camera.fov)
+      : null;
     const attackHeld = this.isTouch
-      ? (this.touch.attack || pressed.attack)
-      : (this.input.attack);
+      ? (this.touch.attack || pressed.attack || !!attackDirection)
+      : this.input.attack;
 
     this.interaction.update(dt, {
       attack: attackHeld,
+      attackDirection,
       usePressed,
       pickPressed: pressed.pick || false,
     }, this.engine.camera);

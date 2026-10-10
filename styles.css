@@ -130,6 +130,7 @@ html, body {
 /* Hotbar */
 #hotbar-wrap {
   position: absolute;
+  z-index: 4; /* Hotbar-Taps bleiben über der großen Joystick-Zone erreichbar. */
   left: 50%;
   bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
@@ -276,6 +277,7 @@ html, body {
 
 #joystick-zone {
   position: absolute;
+  z-index: 2;
   left: 0;
   bottom: 0;
   width: 42vw;
@@ -308,11 +310,10 @@ html, body {
 
 #look-zone {
   position: absolute;
-  right: 0;
-  top: 0;
-  width: 58vw;
-  height: 78vh;
+  z-index: 1;
+  inset: 0 0 22vh 0;
   pointer-events: auto;
+  touch-action: none;
 }
 
 .touch-btn {
@@ -346,6 +347,7 @@ html, body {
 
 #action-buttons {
   position: absolute;
+  z-index: 3;
   right: calc(18px + env(safe-area-inset-right, 0px));
   bottom: calc(120px + env(safe-area-inset-bottom, 0px));
   display: flex;
@@ -355,6 +357,7 @@ html, body {
 
 #move-buttons {
   position: absolute;
+  z-index: 3;
   right: calc(104px + env(safe-area-inset-right, 0px));
   bottom: calc(120px + env(safe-area-inset-bottom, 0px));
   display: flex;
@@ -364,6 +367,7 @@ html, body {
 
 #menu-buttons {
   position: absolute;
+  z-index: 3;
   top: calc(12px + env(safe-area-inset-top, 0px));
   right: calc(12px + env(safe-area-inset-right, 0px));
   display: flex;

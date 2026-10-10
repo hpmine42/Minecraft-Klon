@@ -498,10 +498,11 @@ export class Menus {
       <h3>Handy-Steuerung</h3>
       <ul>
         <li><b>Linker Daumen:</b> Virtueller Joystick zum Bewegen</li>
-        <li><b>Rechte Bildschirmhälfte:</b> Wischen zum Umsehen</li>
+        <li><b>Auf Block tippen &amp; halten:</b> Block direkt unter dem Finger abbauen (wie Pocket Edition)</li>
+        <li><b>Wischen:</b> Umsehen; beim Wischen wird nicht abgebaut</li>
         <li><b>⬆ Taste:</b> Springen (2× tippen = Fliegen an/aus)</li>
         <li><b>⬇ Taste:</b> Schleichen (Tippen zum Umschalten)</li>
-        <li><b>✋ Taste:</b> Block abbauen / Mob angreifen (halten)</li>
+        <li><b>⛏ Taste:</b> Block abbauen / Mob angreifen (halten)</li>
         <li><b>▣ Taste:</b> Block platzieren / Item benutzen</li>
         <li><b>Rucksack:</b> Inventar & Crafting</li>
         <li><b>⚙ Taste:</b> Pause / Einstellungen</li>

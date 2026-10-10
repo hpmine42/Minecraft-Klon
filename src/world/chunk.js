@@ -240,6 +240,8 @@ export function buildChunkGeometry(world, chunk) {
               [c[0], y + 1, c[2]],
               [c[0], y, c[2]],
             ];
+            // Ein Quad pro Ebene – das DoubleSide-Material rendert beide Seiten,
+            // ohne deckungsgleiche Zwillings-Quads (Z-Fighting-Schachbrett).
             for (const p of pts) tPositions.push(p[0], p[1], p[2]);
             tNormals.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
             tUvs.push(
@@ -250,18 +252,6 @@ export function buildChunkGeometry(world, chunk) {
             );
             for (let k = 0; k < 4; k++) tColors.push(r, g, b);
             tIndices.push(base, base + 1, base + 2, base, base + 2, base + 3);
-            // Rückseite
-            const base2 = tPositions.length / 3;
-            for (const p of pts) tPositions.push(p[0], p[1], p[2]);
-            tNormals.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
-            tUvs.push(
-              uvRect.u1, uvRect.v0,
-              uvRect.u1, uvRect.v1,
-              uvRect.u0, uvRect.v1,
-              uvRect.u0, uvRect.v0
-            );
-            for (let k = 0; k < 4; k++) tColors.push(r, g, b);
-            tIndices.push(base2, base2 + 1, base2 + 2, base2, base2 + 2, base2 + 3);
           }
           continue;
         }
