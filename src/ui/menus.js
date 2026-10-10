@@ -9,9 +9,10 @@ export class Menus {
     this.els = elements;
     this.atlas = atlasCanvas;
     this.inventory = inventory;
-    this.cb = callbacks; // { onPlay, onNewWorld, onResume, onSettingsChange, onSave, onQuit, onRespawn, onCraft }
+    this.cb = callbacks; // { onPlay, onNewWorld, onResume, onSettingsChange, onSave, onQuit, onRespawn, onCraft, onFullscreen }
     this.craftGrid = new Array(9).fill(null);
     this.heldStack = null;
+    this._slotGesture = null;
     this.selectedSlot = -1;
     this.activeScreen = null;
     this.recipeList = listRecipes();
@@ -80,6 +81,7 @@ export class Menus {
       this.showScreen('settings-screen');
     });
     click('btn-selftest', () => this.cb.onSelfTest && this.cb.onSelfTest());
+    click('btn-fullscreen', () => this.cb.onFullscreen && this.cb.onFullscreen());
 
     // Einstellungen
     const bindRange = (id, key, format) => {
@@ -256,7 +258,7 @@ export class Menus {
     invWrap.className = 'inv-wrap';
     const invLabel = document.createElement('div');
     invLabel.className = 'craft-label';
-    invLabel.textContent = 'Inventar (antippen zum Aufnehmen/Ablegen)';
+    invLabel.textContent = 'Inventar (antippen oder ziehen zum Aufnehmen/Ablegen)';
     invWrap.appendChild(invLabel);
 
     this.invSlotEls = [];
@@ -290,6 +292,7 @@ export class Menus {
     this.floatingEl = floating;
 
     root.appendChild(invWrap);
+    this._bindInventoryTouchDrag();
 
     // Inventar schließen (X)
     const close = this.els['btn-close-inventory'];
@@ -314,6 +317,8 @@ export class Menus {
   _makeSlot(kind, index) {
     const el = document.createElement('div');
     el.className = 'inv-slot';
+    el.dataset.slotKind = kind;
+    el.dataset.slotIndex = String(index);
     const canvas = document.createElement('canvas');
     canvas.width = 32;
     canvas.height = 32;
@@ -329,18 +334,131 @@ export class Menus {
 
     const slot = { el, canvas, count, dur, durFill: dur.firstChild, kind, index, stack: null };
 
-    const handler = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      markTouchEvent();
-      this._slotClick(kind, index);
-    };
-    el.addEventListener('touchstart', handler, { passive: false });
+    el.addEventListener('touchstart', (e) => this._startInventoryTouch(e, kind, index), { passive: false });
     el.addEventListener('mousedown', (e) => {
       if (wasRecentTouch()) return;
-      handler(e);
+      e.preventDefault();
+      e.stopPropagation();
+      this._slotClick(kind, index);
     });
     return slot;
+  }
+
+  _bindInventoryTouchDrag() {
+    if (typeof document === 'undefined' || !document.addEventListener || this._inventoryDragBound) return;
+    this._inventoryDragBound = true;
+    document.addEventListener('touchmove', (e) => this._moveInventoryTouch(e), { passive: false });
+    document.addEventListener('touchend', (e) => this._endInventoryTouch(e), { passive: false });
+    document.addEventListener('touchcancel', (e) => this._cancelInventoryTouch(e), { passive: false });
+  }
+
+  _startInventoryTouch(e, kind, index) {
+    e.preventDefault();
+    e.stopPropagation();
+    markTouchEvent();
+
+    const touch = e.changedTouches?.[0] || e.touches?.[0] || null;
+    const sourceStack = kind === 'result'
+      ? matchRecipe(this.craftGrid)
+      : kind === 'craft' ? this.craftGrid[index] : this.inventory.getSlot(index);
+    const canDrag = !this.heldStack && !!sourceStack;
+    this._slotGesture = {
+      touchId: touch?.identifier,
+      startX: touch?.clientX ?? 0,
+      startY: touch?.clientY ?? 0,
+      canDrag,
+      dragging: false,
+      lastTarget: null,
+    };
+
+    // Tippen bleibt unverändert: Das Item wird sofort aufgenommen oder abgelegt.
+    this._slotClick(kind, index);
+    if (this.heldStack && touch) this._positionFloatingStack(touch);
+  }
+
+  _touchForSlotGesture(e) {
+    const gesture = this._slotGesture;
+    if (!gesture) return null;
+    const find = (list) => {
+      if (!list) return null;
+      const touches = Array.from(list);
+      return touches.find((touch) => touch.identifier === gesture.touchId) || null;
+    };
+    return find(e.changedTouches) || find(e.touches);
+  }
+
+  _moveInventoryTouch(e) {
+    const gesture = this._slotGesture;
+    const touch = this._touchForSlotGesture(e);
+    if (!gesture || !touch || !gesture.canDrag) return;
+
+    if (!gesture.dragging && Math.hypot(touch.clientX - gesture.startX, touch.clientY - gesture.startY) >= 8) {
+      gesture.dragging = true;
+    }
+    if (!gesture.dragging) return;
+
+    e.preventDefault();
+    markTouchEvent();
+    this._positionFloatingStack(touch);
+    this._setInventoryDragTarget(this._slotAtPoint(touch.clientX, touch.clientY));
+  }
+
+  _endInventoryTouch(e) {
+    const gesture = this._slotGesture;
+    const touch = this._touchForSlotGesture(e);
+    if (!gesture || !touch) return;
+
+    if (gesture.dragging) {
+      e.preventDefault();
+      const target = this._slotAtPoint(touch.clientX, touch.clientY) || gesture.lastTarget;
+      if (target) this._slotClick(target.kind, target.index);
+    }
+    this._clearInventoryDragTarget();
+    this._slotGesture = null;
+  }
+
+  _cancelInventoryTouch(e) {
+    if (!this._slotGesture || !this._touchForSlotGesture(e)) return;
+    this._clearInventoryDragTarget();
+    this._slotGesture = null;
+  }
+
+  _slotAtPoint(x, y) {
+    if (typeof document === 'undefined' || !document.elementFromPoint) return null;
+    const hit = document.elementFromPoint(x, y);
+    const slotEl = hit?.closest?.('.inv-slot') || (hit?.dataset?.slotKind ? hit : null);
+    const kind = slotEl?.dataset?.slotKind;
+    const index = Number(slotEl?.dataset?.slotIndex);
+    if (!slotEl || !['inv', 'craft', 'result'].includes(kind) || !Number.isInteger(index)) return null;
+    return { el: slotEl, kind, index };
+  }
+
+  _setInventoryDragTarget(target) {
+    const gesture = this._slotGesture;
+    if (!gesture) return;
+    if (gesture.lastTarget?.el && gesture.lastTarget.el !== target?.el) {
+      gesture.lastTarget.el.classList.remove('drag-over');
+    }
+    if (target?.el) target.el.classList.add('drag-over');
+    gesture.lastTarget = target;
+  }
+
+  _clearInventoryDragTarget() {
+    const target = this._slotGesture?.lastTarget;
+    if (target?.el) target.el.classList.remove('drag-over');
+  }
+
+  _positionFloatingStack(touch) {
+    const floating = this.floatingEl;
+    if (!floating || !touch) return;
+    const viewportWidth = (typeof window !== 'undefined' ? window.innerWidth : 0) || document.documentElement?.clientWidth || 0;
+    const viewportHeight = (typeof window !== 'undefined' ? window.innerHeight : 0) || document.documentElement?.clientHeight || 0;
+    const width = floating.offsetWidth || 140;
+    const height = floating.offsetHeight || 48;
+    const left = Math.max(8, Math.min(touch.clientX + 14, viewportWidth - width - 8));
+    const top = Math.max(8, Math.min(touch.clientY + 14, viewportHeight - height - 8));
+    floating.style.left = `${left}px`;
+    floating.style.top = `${top}px`;
   }
 
   _slotClick(kind, index) {
@@ -504,7 +622,8 @@ export class Menus {
         <li><b>⬇ Taste:</b> Schleichen (Tippen zum Umschalten)</li>
         <li><b>⛏ Taste:</b> Block abbauen / Mob angreifen (halten)</li>
         <li><b>▣ Taste:</b> Block platzieren / Item benutzen</li>
-        <li><b>Rucksack:</b> Inventar & Crafting</li>
+        <li><b>Rucksack:</b> Inventar & Crafting; Items antippen oder direkt ins 3×3-Feld ziehen</li>
+        <li><b>⛶ Taste:</b> Vollbild ein- und ausschalten</li>
         <li><b>⚙ Taste:</b> Pause / Einstellungen</li>
         <li><b>Hotbar:</b> Antippen zum Itemwechsel</li>
       </ul>

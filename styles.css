@@ -15,7 +15,7 @@ html, body {
   overflow: hidden;
   background: #0d1117;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  touch-action: none;
+  touch-action: manipulation;
   overscroll-behavior: none;
 }
 
@@ -217,7 +217,7 @@ html, body {
 #fps {
   position: absolute;
   top: calc(10px + env(safe-area-inset-top, 0px));
-  right: 12px;
+  right: 68px;
   font-size: 12px;
   color: #fff;
   text-shadow: 1px 1px 2px #000;
@@ -225,6 +225,26 @@ html, body {
   padding: 2px 8px;
   border-radius: 5px;
 }
+
+.fullscreen-btn {
+  position: absolute;
+  z-index: 5;
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  right: calc(10px + env(safe-area-inset-right, 0px));
+  width: 48px;
+  height: 48px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 12px;
+  background: rgba(18, 24, 36, 0.78);
+  color: #fff;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+.fullscreen-btn:hover { background: rgba(255, 255, 255, 0.2); }
+.fullscreen-btn:active { transform: scale(0.94); }
 
 #debug {
   position: absolute;
@@ -278,6 +298,7 @@ html, body {
 #joystick-zone {
   position: absolute;
   z-index: 2;
+  touch-action: none;
   left: 0;
   bottom: 0;
   width: 42vw;
@@ -593,6 +614,11 @@ html, body {
   border-color: #7ed957;
   background: rgba(126, 217, 87, 0.14);
 }
+.inv-slot.drag-over {
+  outline: 2px solid #9af276;
+  outline-offset: 1px;
+  background: rgba(126, 217, 87, 0.3);
+}
 .inv-grid {
   display: grid;
   grid-template-columns: repeat(9, 52px);
@@ -729,58 +755,143 @@ html, body {
     width: min(7.4vw, 32px);
     height: min(7.4vw, 32px);
   }
+  .screen {
+    padding: calc(8px + env(safe-area-inset-top, 0px)) calc(8px + env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) calc(8px + env(safe-area-inset-left, 0px));
+    touch-action: pan-y;
+  }
   .menu-panel {
-    padding: 18px 16px;
-    width: 94vw;
+    padding: 14px 12px;
+    width: 100%;
+    max-height: calc(100vh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   }
-  .inv-grid {
-    grid-template-columns: repeat(9, min(10vw, 50px));
-  }
+  .menu-panel.wide { width: 100%; }
+  .inv-panel { padding: 12px 10px; }
+  .inv-header { align-items: center; gap: 6px; }
+  .inv-header h2 { font-size: clamp(18px, 5vw, 24px); }
+  .inv-header .small-btn { padding: 7px 8px; min-height: 40px; font-size: 12px; }
+  #inventory-screen .menu-panel { touch-action: pan-y; overscroll-behavior: contain; }
+  #inventory-body, .inv-wrap, .craft-wrap { width: 100%; min-width: 0; }
+  .craft-area { gap: clamp(6px, 2vw, 12px); }
   .craft-grid {
-    grid-template-columns: repeat(3, min(12vw, 52px));
+    width: min(42vw, 172px);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    flex: 0 0 auto;
   }
-  .inv-slot {
-    width: min(10vw, 52px);
-    height: min(10vw, 52px);
+  .craft-grid .inv-slot,
+  .inv-grid .inv-slot {
+    width: 100%;
+    height: auto;
+    min-width: 0;
+    aspect-ratio: 1;
   }
+  .craft-area > .craft-result {
+    width: clamp(34px, 10vw, 44px);
+    height: clamp(34px, 10vw, 44px);
+    flex: 0 0 auto;
+  }
+  .craft-arrow { font-size: clamp(18px, 6vw, 26px); }
+  .inv-grid {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+    gap: 3px;
+    overflow: visible;
+    padding-bottom: 4px;
+  }
+  .inv-slot { touch-action: none; }
+  .recipe-list { touch-action: pan-y; }
   .heart { font-size: 15px; }
+  #item-name { margin-top: 2px; padding: 2px 8px; font-size: 11px; }
+  #mode-label { display: none; }
   #stats-bars {
-    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(98px + env(safe-area-inset-bottom, 0px));
     width: 92vw;
   }
+  #action-buttons {
+    bottom: calc(136px + env(safe-area-inset-bottom, 0px));
+  }
+  #move-buttons {
+    bottom: calc(136px + env(safe-area-inset-bottom, 0px));
+  }
+  #joystick-base {
+    bottom: calc(140px + env(safe-area-inset-bottom, 0px));
+  }
+  #menu-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, 60px);
+    gap: 6px;
+  }
+  #menu-buttons .touch-btn.small {
+    width: 60px;
+    height: 60px;
+  }
+  .fullscreen-btn {
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    right: auto;
+    left: calc(12px + env(safe-area-inset-left, 0px));
+    width: 60px;
+    height: 60px;
+    font-size: 30px;
+  }
   #fps {
-    top: auto;
-    bottom: calc(190px + env(safe-area-inset-bottom, 0px));
-    right: 8px;
+    top: calc(78px + env(safe-area-inset-top, 0px));
+    right: auto;
+    bottom: auto;
+    left: calc(12px + env(safe-area-inset-left, 0px));
     font-size: 10px;
+  }
+  #debug {
+    top: calc(108px + env(safe-area-inset-top, 0px));
+    left: calc(12px + env(safe-area-inset-left, 0px));
+    max-width: min(46vw, 230px);
   }
 }
 
 @media (max-height: 480px) {
-  /* Querformat-Handy */
+  /* Querformat: Statusleiste über der Hotbar, Steuerknöpfe in klar getrennten Zonen. */
   #stats-bars {
-    bottom: calc(6px + env(safe-area-inset-bottom, 0px));
-    width: 34vw;
-    left: calc(50% - 10vw);
+    bottom: calc(94px + env(safe-area-inset-bottom, 0px));
+    width: min(58vw, 420px);
+    left: 50%;
   }
   #hotbar-wrap {
     bottom: calc(4px + env(safe-area-inset-bottom, 0px));
     left: 50%;
     transform: translateX(-50%);
   }
+  #item-name { margin-top: 2px; padding: 2px 8px; font-size: 11px; }
+  #mode-label { display: none; }
   .heart { font-size: 13px; }
   #action-buttons {
-    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(132px + env(safe-area-inset-bottom, 0px));
+    gap: 8px;
   }
   #move-buttons {
-    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(132px + env(safe-area-inset-bottom, 0px));
     right: calc(110px + env(safe-area-inset-right, 0px));
+    gap: 6px;
   }
   #joystick-base {
-    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(120px + env(safe-area-inset-bottom, 0px));
     left: calc(18px + env(safe-area-inset-left, 0px));
     width: 104px;
     height: 104px;
+  }
+  #menu-buttons {
+    display: flex;
+    gap: 6px;
+  }
+  #menu-buttons .touch-btn.small {
+    width: 48px;
+    height: 48px;
+  }
+  .fullscreen-btn {
+    top: calc(8px + env(safe-area-inset-top, 0px));
+    width: 48px;
+    height: 48px;
+    font-size: 25px;
   }
 }
 
@@ -793,5 +904,28 @@ html, body {
   .menu-btn {
     min-height: 50px;
     font-size: 16px;
+  }
+}
+
+@media (pointer: coarse) and (max-height: 480px) {
+  #menu-buttons .touch-btn.small {
+    min-width: 48px;
+    min-height: 48px;
+  }
+  #move-buttons .touch-btn {
+    width: 50px;
+    height: 50px;
+    min-width: 50px;
+    min-height: 50px;
+  }
+  #action-buttons .touch-btn.big {
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+    min-height: 56px;
+  }
+  .fullscreen-btn {
+    min-width: 48px;
+    min-height: 48px;
   }
 }

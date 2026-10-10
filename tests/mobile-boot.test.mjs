@@ -20,7 +20,7 @@ function makeEl(id) {
     height: 32,
     offsetWidth: 100,
     firstChild: { style: {} },
-    appendChild(c) { this.children.push(c); return c; },
+    appendChild(c) { c.parentElement = this; this.children.push(c); return c; },
     removeChild(c) { return c; },
     addEventListener(type, fn) {
       (listeners[type] = listeners[type] || []).push(fn);
@@ -39,6 +39,12 @@ function makeEl(id) {
     querySelectorAll: () => [],
     focus() {},
     requestPointerLock() {},
+    closest(selector) {
+      for (let el = this; el; el = el.parentElement) {
+        if (selector === '.inv-slot' && el.dataset?.slotKind) return el;
+      }
+      return null;
+    },
     el: null,
   };
 }
@@ -130,17 +136,25 @@ globalThis.window = {
     resume() {}
   },
 };
+const documentListeners = {};
 globalThis.document = {
   readyState: 'loading',
   getElementById: elById,
   createElement: () => makeEl('dyn'),
-  addEventListener() {},
+  addEventListener(type, fn) { (documentListeners[type] ||= []).push(fn); },
   removeEventListener() {},
+  dispatch(type, event) { for (const fn of documentListeners[type] || []) fn(event); },
+  elementFromPoint() { return this._pointElement || null; },
   pointerLockElement: null,
+  fullscreenElement: null,
+  exitFullscreen() { this.fullscreenElement = null; },
   exitPointerLock() {},
   hidden: false,
   body: makeEl('body'),
   documentElement: makeEl('html'),
+};
+globalThis.document.documentElement.requestFullscreen = async function requestFullscreen() {
+  globalThis.document.fullscreenElement = this;
 };
 globalThis.localStorage = {
   _data: {},
@@ -268,8 +282,43 @@ ok(game.world.getBlock(targetBlock.x, targetBlock.y, targetBlock.z) === BLOCK.AI
 const invBtn = elById('btn-inventory');
 invBtn.dispatch('touchstart', makeEvent([{ identifier: 7, clientX: 10, clientY: 10 }]));
 ok(game.state === 'inventory', 'Inventar-Button öffnet Inventar');
+
+// Item mit einem Finger aus dem Inventar direkt ins 3×3-Craftingfeld ziehen.
+game.inventory.slots[9] = { id: BLOCK.LOG, count: 1, dur: null };
+game.menus.refreshInventory();
+const logSlot = game.menus.invSlotEls.find((slot) => slot.index === 9);
+const craftTarget = game.menus.craftSlotEls[4];
+logSlot.el.dispatch('touchstart', makeEvent([{ identifier: 20, clientX: 100, clientY: 300 }]));
+document._pointElement = craftTarget.canvas; // Browser elementFromPoint trifft meist das Slot-Icon.
+document.dispatch('touchmove', makeEvent([{ identifier: 20, clientX: 180, clientY: 380 }]));
+document.dispatch('touchend', makeEvent([{ identifier: 20, clientX: 180, clientY: 380 }]));
+ok(game.inventory.slots[9] === null && game.menus.craftGrid[4]?.id === BLOCK.LOG && game.menus.heldStack === null,
+  'Mobiles Drag-and-Drop verschiebt den Gegenstand ohne Duplikat ins Craftingfeld');
+ok(game.menus.resultSlotEl.stack?.id === BLOCK.PLANKS,
+  'Crafting-Ergebnis wird nach dem mobilen Ablegen aktualisiert');
+
+// Die bisherige Zwei-Tap-Bedienung bleibt neben Drag-and-Drop verfügbar.
+game.inventory.slots[10] = { id: BLOCK.COBBLESTONE, count: 2, dur: null };
+game.menus.refreshInventory();
+const cobbleSlot = game.menus.invSlotEls.find((slot) => slot.index === 10);
+cobbleSlot.el.dispatch('touchstart', makeEvent([{ identifier: 21, clientX: 110, clientY: 300 }]));
+document._pointElement = cobbleSlot.el;
+document.dispatch('touchend', makeEvent([{ identifier: 21, clientX: 110, clientY: 300 }]));
+game.menus.craftSlotEls[0].el.dispatch('touchstart', makeEvent([{ identifier: 22, clientX: 150, clientY: 350 }]));
+document._pointElement = game.menus.craftSlotEls[0].el;
+document.dispatch('touchend', makeEvent([{ identifier: 22, clientX: 150, clientY: 350 }]));
+ok(game.menus.craftGrid[0]?.id === BLOCK.COBBLESTONE,
+  'Inventar-Items lassen sich weiterhin per Antippen und erneutem Antippen ablegen');
+game.menus._returnCraftGrid();
+
+document._pointElement = null;
 invBtn.dispatch('touchstart', makeEvent([{ identifier: 8, clientX: 10, clientY: 10 }]));
 ok(game.state === 'playing', 'Inventar-Button schließt Inventar');
+const craftBtn = elById('btn-craft');
+craftBtn.dispatch('touchstart', makeEvent([{ identifier: 25, clientX: 10, clientY: 10 }]));
+ok(game.state === 'inventory', 'Crafting-Schnellknopf öffnet das Inventar');
+invBtn.dispatch('touchstart', makeEvent([{ identifier: 26, clientX: 10, clientY: 10 }]));
+ok(game.state === 'playing', 'Inventar bleibt über den Schnellknopf schließbar');
 
 // Menü-Button → Pause
 const menuBtn = elById('btn-menu');
@@ -277,6 +326,15 @@ menuBtn.dispatch('touchstart', makeEvent([{ identifier: 9, clientX: 10, clientY:
 ok(game.state === 'paused', 'Menü-Button öffnet Pause');
 menuBtn.dispatch('touchstart', makeEvent([{ identifier: 10, clientX: 10, clientY: 10 }]));
 ok(game.state === 'playing', 'Menü-Button kehrt zurück');
+
+// Vollbildmodus lässt sich auf dem Handy ein- und ausschalten.
+const fullscreenBtn = elById('btn-fullscreen');
+fullscreenBtn.dispatch('touchend', makeEvent([{ identifier: 23, clientX: 20, clientY: 20 }]));
+await new Promise((r) => setTimeout(r, 0));
+ok(document.fullscreenElement === document.documentElement, 'Vollbildknopf aktiviert den Vollbildmodus');
+fullscreenBtn.dispatch('touchend', makeEvent([{ identifier: 24, clientX: 20, clientY: 20 }]));
+await new Promise((r) => setTimeout(r, 0));
+ok(document.fullscreenElement === null, 'Vollbildknopf beendet den Vollbildmodus wieder');
 
 // Pixel-Ratio für Handy begrenzt
 ok(game.engine.pixelRatio <= 1.75, `Pixel-Ratio gedrosselt (${game.engine.pixelRatio})`);

@@ -126,6 +126,7 @@ class Game {
       'btn-help': $('btn-help'),
       'btn-help-back': $('btn-help-back'),
       'btn-selftest': $('btn-selftest'),
+      'btn-fullscreen': $('btn-fullscreen'),
       'btn-reset-world': $('btn-reset-world'),
       'btn-delete-save': $('btn-delete-save'),
       'btn-selftest-back': $('btn-selftest-back'),
@@ -153,7 +154,11 @@ class Game {
       onCraft: () => this.audio.craft(),
       onDropStack: (id, count) => this._dropItems(id, count),
       onSelfTest: () => this.runSelfTest(),
+      onFullscreen: () => this.toggleFullscreen(),
     });
+    document.addEventListener('fullscreenchange', () => this._syncFullscreenButton());
+    document.addEventListener('webkitfullscreenchange', () => this._syncFullscreenButton());
+    this._syncFullscreenButton();
     this.menus.setSettings(this.settings);
     this.menus.setHasSave(hasSave());
     this.menus.populateHelp(this.isTouch);
@@ -400,8 +405,42 @@ class Game {
   }
 
   // =========================================================================
-  // Zustandswechsel
+  // Vollbild & Zustandswechsel
   // =========================================================================
+  async toggleFullscreen() {
+    const doc = document;
+    const active = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+    const exit = doc.exitFullscreen || doc.webkitExitFullscreen;
+    const request = doc.documentElement?.requestFullscreen || doc.documentElement?.webkitRequestFullscreen;
+
+    try {
+      if (active) {
+        if (!exit) throw new Error('Fullscreen exit is not supported');
+        await exit.call(doc);
+      } else {
+        if (!request) {
+          this.toast('Vollbild wird von diesem Browser nicht unterstützt.');
+          return false;
+        }
+        await request.call(doc.documentElement);
+      }
+      this._syncFullscreenButton();
+      return true;
+    } catch {
+      this.toast('Vollbildmodus konnte nicht geändert werden.');
+      return false;
+    }
+  }
+
+  _syncFullscreenButton() {
+    const button = $('btn-fullscreen');
+    if (!button) return;
+    const active = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    button.setAttribute('aria-pressed', String(active));
+    button.setAttribute('aria-label', active ? 'Vollbildmodus beenden' : 'Vollbildmodus aktivieren');
+    button.title = active ? 'Vollbildmodus beenden' : 'Vollbildmodus aktivieren';
+  }
+
   pause() {
     if (this.state !== 'playing') return;
     this.state = 'paused';
@@ -587,6 +626,9 @@ class Game {
       case 'menu':
         if (this.state === 'playing') this.pause();
         else if (this.state === 'paused') this.resume();
+        break;
+      case 'craft':
+        if (this.state === 'playing') this.openInventory();
         break;
       case 'fly':
         if (this.state === 'playing' && this.player.gamemode === 'creative') {

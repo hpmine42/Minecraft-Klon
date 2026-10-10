@@ -51,7 +51,7 @@ for (const id of touchIds) {
 // HUD-Elemente
 const hudIds = [
   'game', 'hud', 'hotbar', 'hearts', 'hunger', 'air', 'item-name',
-  'break-progress', 'fps', 'debug', 'hurt-overlay', 'water-overlay', 'mode-label',
+  'break-progress', 'fps', 'btn-fullscreen', 'debug', 'hurt-overlay', 'water-overlay', 'mode-label',
 ];
 for (const id of hudIds) {
   if (!htmlIds.has(id)) {
