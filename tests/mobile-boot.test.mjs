@@ -27,6 +27,7 @@ function makeEl(id) {
     },
     removeEventListener() {},
     dispatch(type, event) {
+      if (event) event.currentTarget = this;
       for (const fn of listeners[type] || []) fn(event);
     },
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 700, right: 390, bottom: 700 }),
@@ -39,6 +40,7 @@ function makeEl(id) {
     querySelectorAll: () => [],
     focus() {},
     requestPointerLock() {},
+    setPointerCapture(pointerId) { this.capturedPointerId = pointerId; },
     closest(selector) {
       for (let el = this; el; el = el.parentElement) {
         if (selector === '.inv-slot' && el.dataset?.slotKind) return el;
@@ -124,7 +126,8 @@ globalThis.window = {
     if (type === 'DOMContentLoaded') this._domReady = fn;
   },
   removeEventListener() {},
-  // Handy: coarse pointer
+  // Handy: Touch + Pointer Events wie in modernen mobilen Browsern.
+  PointerEvent: class PointerEvent {},
   matchMedia: () => ({ matches: true, addListener() {} }),
   AudioContext: class {
     constructor() { this.currentTime = 0; this.sampleRate = 44100; this.state = 'running'; this.destination = {}; }
@@ -201,6 +204,10 @@ ok(game.world.chunks.size > 0, `Welt da (${game.world.chunks.size} Chunks)`);
 
 // Joystick bewegen → Spieler läuft
 const makeEvent = (touches) => ({ preventDefault() {}, stopPropagation() {}, changedTouches: touches, touches });
+const makePointerEvent = (pointerId, clientX, clientY) => ({
+  pointerId, pointerType: 'touch', isPrimary: true, clientX, clientY,
+  preventDefault() {}, stopPropagation() {},
+});
 const joyZone = elById('joystick-zone');
 const startPos = { ...game.player.position };
 joyZone.dispatch('touchstart', makeEvent([{ identifier: 1, clientX: 80, clientY: 500 }]));
@@ -288,10 +295,11 @@ game.inventory.slots[9] = { id: BLOCK.LOG, count: 1, dur: null };
 game.menus.refreshInventory();
 const logSlot = game.menus.invSlotEls.find((slot) => slot.index === 9);
 const craftTarget = game.menus.craftSlotEls[4];
-logSlot.el.dispatch('touchstart', makeEvent([{ identifier: 20, clientX: 100, clientY: 300 }]));
+logSlot.el.dispatch('pointerdown', makePointerEvent(20, 100, 300));
+ok(logSlot.el.capturedPointerId === 20, 'Mobile Crafting-Drag übernimmt den Pointer bis zum Loslassen');
 document._pointElement = craftTarget.canvas; // Browser elementFromPoint trifft meist das Slot-Icon.
-document.dispatch('touchmove', makeEvent([{ identifier: 20, clientX: 180, clientY: 380 }]));
-document.dispatch('touchend', makeEvent([{ identifier: 20, clientX: 180, clientY: 380 }]));
+document.dispatch('pointermove', makePointerEvent(20, 180, 380));
+document.dispatch('pointerup', makePointerEvent(20, 180, 380));
 ok(game.inventory.slots[9] === null && game.menus.craftGrid[4]?.id === BLOCK.LOG && game.menus.heldStack === null,
   'Mobiles Drag-and-Drop verschiebt den Gegenstand ohne Duplikat ins Craftingfeld');
 ok(game.menus.resultSlotEl.stack?.id === BLOCK.PLANKS,
@@ -301,12 +309,12 @@ ok(game.menus.resultSlotEl.stack?.id === BLOCK.PLANKS,
 game.inventory.slots[10] = { id: BLOCK.COBBLESTONE, count: 2, dur: null };
 game.menus.refreshInventory();
 const cobbleSlot = game.menus.invSlotEls.find((slot) => slot.index === 10);
-cobbleSlot.el.dispatch('touchstart', makeEvent([{ identifier: 21, clientX: 110, clientY: 300 }]));
+cobbleSlot.el.dispatch('pointerdown', makePointerEvent(21, 110, 300));
 document._pointElement = cobbleSlot.el;
-document.dispatch('touchend', makeEvent([{ identifier: 21, clientX: 110, clientY: 300 }]));
-game.menus.craftSlotEls[0].el.dispatch('touchstart', makeEvent([{ identifier: 22, clientX: 150, clientY: 350 }]));
+document.dispatch('pointerup', makePointerEvent(21, 110, 300));
+game.menus.craftSlotEls[0].el.dispatch('pointerdown', makePointerEvent(22, 150, 350));
 document._pointElement = game.menus.craftSlotEls[0].el;
-document.dispatch('touchend', makeEvent([{ identifier: 22, clientX: 150, clientY: 350 }]));
+document.dispatch('pointerup', makePointerEvent(22, 150, 350));
 ok(game.menus.craftGrid[0]?.id === BLOCK.COBBLESTONE,
   'Inventar-Items lassen sich weiterhin per Antippen und erneutem Antippen ablegen');
 game.menus._returnCraftGrid();
@@ -327,14 +335,32 @@ ok(game.state === 'paused', 'Menü-Button öffnet Pause');
 menuBtn.dispatch('touchstart', makeEvent([{ identifier: 10, clientX: 10, clientY: 10 }]));
 ok(game.state === 'playing', 'Menü-Button kehrt zurück');
 
-// Vollbildmodus lässt sich auf dem Handy ein- und ausschalten.
+// Vollbildmodus ist auch im Hauptmenü erreichbar (der HUD-Button liegt hinter dem Menü-Overlay).
+game.menus.showScreen('main-menu');
+const menuFullscreenBtn = elById('btn-fullscreen-menu');
+menuFullscreenBtn.dispatch('touchend', makeEvent([{ identifier: 23, clientX: 20, clientY: 20 }]));
+await new Promise((r) => setTimeout(r, 0));
+ok(document.fullscreenElement === document.documentElement, 'Vollbildknopf im Hauptmenü aktiviert Vollbild');
+ok(menuFullscreenBtn.textContent.includes('beenden'), 'Menüknopf zeigt den aktiven Vollbildstatus');
+menuFullscreenBtn.dispatch('touchend', makeEvent([{ identifier: 24, clientX: 20, clientY: 20 }]));
+await new Promise((r) => setTimeout(r, 0));
+ok(document.fullscreenElement === null, 'Vollbildknopf im Hauptmenü beendet Vollbild wieder');
+game.menus.hideAll();
+
+// Der HUD-Knopf funktioniert während des Spiels ebenfalls.
 const fullscreenBtn = elById('btn-fullscreen');
-fullscreenBtn.dispatch('touchend', makeEvent([{ identifier: 23, clientX: 20, clientY: 20 }]));
+fullscreenBtn.dispatch('touchend', makeEvent([{ identifier: 27, clientX: 20, clientY: 20 }]));
 await new Promise((r) => setTimeout(r, 0));
-ok(document.fullscreenElement === document.documentElement, 'Vollbildknopf aktiviert den Vollbildmodus');
-fullscreenBtn.dispatch('touchend', makeEvent([{ identifier: 24, clientX: 20, clientY: 20 }]));
+ok(document.fullscreenElement === document.documentElement, 'HUD-Vollbildknopf aktiviert Vollbild');
+fullscreenBtn.dispatch('touchend', makeEvent([{ identifier: 28, clientX: 20, clientY: 20 }]));
 await new Promise((r) => setTimeout(r, 0));
-ok(document.fullscreenElement === null, 'Vollbildknopf beendet den Vollbildmodus wieder');
+ok(document.fullscreenElement === null, 'HUD-Vollbildknopf beendet Vollbild wieder');
+
+game.touch.setSneak(true);
+const flyingBeforeToggle = game.player.flying;
+game._toggleFlight();
+ok(game.player.flying !== flyingBeforeToggle && !game.touch.sneak,
+  'Flugmoduswechsel löscht den alten mobilen Abwärts-Toggle');
 
 // Pixel-Ratio für Handy begrenzt
 ok(game.engine.pixelRatio <= 1.75, `Pixel-Ratio gedrosselt (${game.engine.pixelRatio})`);

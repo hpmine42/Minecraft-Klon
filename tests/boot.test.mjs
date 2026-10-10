@@ -267,5 +267,36 @@ await new Promise((r) => setTimeout(r, 500));
 ok(game.state === 'playing', 'Spiel fortgesetzt');
 ok(game.world.chunks.size > 0, `Welt nach Laden da (${game.world.chunks.size} Chunks)`);
 
+// Tastatur: Strg sprintet ohne gleichzeitig zu schleichen, beide Strg-Tasten funktionieren.
+game.input.keys.clear();
+game.input.keys.add('ControlLeft');
+let keyMove = game.input.movement();
+ok(keyMove.sprint && !keyMove.sneak, 'Linkes Strg sprintet, ohne versehentlich abzusteigen/schleichen');
+game.input.keys.clear();
+game.input.keys.add('ControlRight');
+keyMove = game.input.movement();
+ok(keyMove.sprint && !keyMove.sneak, 'Rechtes Strg sprintet ebenfalls');
+game.input.keys.clear();
+game.input.keys.add('ShiftLeft');
+keyMove = game.input.movement();
+ok(keyMove.sneak && !keyMove.sprint, 'Shift bleibt die separate Schleichen-/Abstiegstaste');
+game.input.keys.clear();
+
+// Flug-Doppeltipp: kein Startfehler, und Tastatur-Key-Repeat toggelt nicht mehrfach.
+game.player.gamemode = 'creative';
+game._setFlying(false);
+game.doubleJumpTimer = -Infinity;
+game._onKey({ code: 'Space', repeat: false, preventDefault() {} });
+ok(!game.player.flying, 'Erster Leertastendruck schaltet Kreativflug nicht versehentlich ein');
+const firstFlightTap = game.doubleJumpTimer;
+game._onKey({ code: 'Space', repeat: true, preventDefault() {} });
+ok(!game.player.flying && game.doubleJumpTimer === firstFlightTap, 'Gedrückthalten zählt nicht als zweiter Flug-Tap');
+game._onKey({ code: 'Space', repeat: false, preventDefault() {} });
+ok(game.player.flying, 'Zwei echte Leertasten-Taps aktivieren den Flug');
+const secondFlightTap = game.doubleJumpTimer;
+game._onKey({ code: 'Space', repeat: true, preventDefault() {} });
+ok(game.player.flying && game.doubleJumpTimer === secondFlightTap, 'Key-Repeat deaktiviert den Flug nicht wieder');
+game._setFlying(false);
+
 console.log(`\n${passed} bestanden, ${failed} fehlgeschlagen`);
 process.exit(failed > 0 ? 1 : 0);

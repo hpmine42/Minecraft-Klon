@@ -64,6 +64,28 @@ ok(atlas.pixels[atlasPixel(37, 0, 0) + 3] === 0, 'Gras-Textur hat transparenten 
 ok(atlas.pixels[atlasPixel(25, 0, 0) + 3] === 255, 'Laub-Textur füllt die ganze Kachel');
 ok(atlas.pixels[atlasPixel(43, 2, 2) + 3] === 0, 'Glas-Textur hat transparenten Hintergrund');
 ok(atlas.pixels[atlasPixel(43, 0, 8) + 3] === 255, 'Glasrahmen bleibt sichtbar');
+const opaqueBlockTiles = new Set(Object.values(BLOCKS)
+  .filter((b) => b.id !== BLOCK.AIR && !b.transparent && b.render !== 'item' && b.tiles)
+  .flatMap((b) => b.tiles));
+ok([...opaqueBlockTiles].every((tile) => {
+  for (let y = 0; y < TILE_SIZE; y++) {
+    for (let x = 0; x < TILE_SIZE; x++) {
+      if (atlas.pixels[atlasPixel(tile, x, y) + 3] !== 255) return false;
+    }
+  }
+  return true;
+}), 'Alle opaken Blockseiten-Texturen sind vollständig deckend');
+const hasColoredPixel = (tile) => {
+  for (let y = 0; y < TILE_SIZE; y++) {
+    for (let x = 0; x < TILE_SIZE; x++) {
+      const i = atlasPixel(tile, x, y);
+      if (atlas.pixels[i + 3] > 0 && atlas.pixels[i] + atlas.pixels[i + 1] + atlas.pixels[i + 2] > 0) return true;
+    }
+  }
+  return false;
+};
+ok(hasColoredPixel(35) && hasColoredPixel(36) && hasColoredPixel(37),
+  'Blumen- und Gras-Texturen enthalten sichtbare Farben');
 ok(BLOCKS[BLOCK.LEAVES].transparent === false, 'Laub blockiert die Sicht (kein schwarzer Himmel durch Löcher)');
 
 // Welt
@@ -139,6 +161,22 @@ const probeWorld = { getBlock: () => BLOCK.AIR, getSkyLight: () => 15, getBlockL
 probeChunk.set(8, 30, 8, BLOCK.STONE);
 let probeGeometry = buildChunkGeometry(probeWorld, probeChunk);
 ok(probeGeometry.solid?.attributes.position.count === 24, 'Einzelner Block rendert alle sechs Außenseiten');
+const positions = probeGeometry.solid.attributes.position.array;
+const normals = probeGeometry.solid.attributes.normal.array;
+const indices = probeGeometry.solid.index.array;
+let facesWindOutward = true;
+for (let i = 0; i < indices.length; i += 3) {
+  const ia = indices[i], ib = indices[i + 1], ic = indices[i + 2];
+  const ax = positions[ia * 3], ay = positions[ia * 3 + 1], az = positions[ia * 3 + 2];
+  const abx = positions[ib * 3] - ax, aby = positions[ib * 3 + 1] - ay, abz = positions[ib * 3 + 2] - az;
+  const acx = positions[ic * 3] - ax, acy = positions[ic * 3 + 1] - ay, acz = positions[ic * 3 + 2] - az;
+  const nx = aby * acz - abz * acy;
+  const ny = abz * acx - abx * acz;
+  const nz = abx * acy - aby * acx;
+  const dot = nx * normals[ia * 3] + ny * normals[ia * 3 + 1] + nz * normals[ia * 3 + 2];
+  if (dot <= 0) facesWindOutward = false;
+}
+ok(facesWindOutward, 'Alle Blockflächen sind nach außen gewunden und von außen sichtbar');
 probeChunk.set(8, 30, 8, BLOCK.LEAVES);
 probeGeometry = buildChunkGeometry(probeWorld, probeChunk);
 ok(probeGeometry.solid?.attributes.position.count === 24 && probeGeometry.transparent === null,
@@ -147,6 +185,13 @@ probeChunk.set(8, 30, 8, BLOCK.FLOWER_RED);
 probeGeometry = buildChunkGeometry(probeWorld, probeChunk);
 ok(probeGeometry.transparent?.attributes.position.count === 8,
   'Kreuzpflanze hat genau zwei Flächen ohne doppelte Z-Fighting-Quads');
+const darkPlantChunk = new Chunk(0, 0);
+darkPlantChunk.set(8, 30, 8, BLOCK.FLOWER_RED);
+const darkPlantGeometry = buildChunkGeometry({
+  getBlock: () => BLOCK.AIR, getSkyLight: () => 0, getBlockLight: () => 0,
+}, darkPlantChunk).transparent;
+ok(Math.min(...darkPlantGeometry.attributes.color.array) >= 0.45 - 1e-6,
+  'Kreuzpflanzen behalten Mindesthelligkeit statt schwarz zu werden');
 
 console.log(`\n${passed} bestanden, ${failed} fehlgeschlagen`);
 if (failed > 0) process.exit(1);

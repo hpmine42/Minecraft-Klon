@@ -74,7 +74,7 @@ export class TouchControls {
     this.usePressed = false;
     this.flyPressed = false;
 
-    this._lastJumpTap = 0;
+    this._lastJumpTap = -Infinity;
     this.enabled = true;
 
     this._bindJoystick();
@@ -252,7 +252,7 @@ export class TouchControls {
     }, () => { this.jump = false; });
 
     bind(this.els.btnSneak, () => {
-      this.sneak = !this.sneak; // Toggle
+      this.setSneak(!this.sneak); // Toggle; der Status bleibt auch optisch sichtbar.
       this.onAction('sneak');
     }, null);
 
@@ -277,6 +277,12 @@ export class TouchControls {
     bind(this.els.btnCraft, () => this.onAction('craft'), null);
     bind(this.els.btnDebug, () => this.onAction('debug'), null);
     bind(this.els.btnChatless ?? null, () => this.onAction('cycleMode'), null);
+  }
+
+  /** Setzt den Sneak-Schalter und synchronisiert seine Touch-Anzeige. */
+  setSneak(active) {
+    this.sneak = !!active;
+    this.els.btnSneak?.classList.toggle('toggled', this.sneak);
   }
 
   /**

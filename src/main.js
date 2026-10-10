@@ -34,7 +34,7 @@ class Game {
     this.rainStrength = 0;
     this.autosaveTimer = 0;
     this.lastFrame = 0;
-    this.doubleJumpTimer = 0;
+    this.doubleJumpTimer = -Infinity;
     this.stats = { blocksPlaced: 0, blocksMined: 0, mobsKilled: 0, itemsPicked: 0, distance: 0 };
     this.lastSavePos = null;
   }
@@ -127,6 +127,7 @@ class Game {
       'btn-help-back': $('btn-help-back'),
       'btn-selftest': $('btn-selftest'),
       'btn-fullscreen': $('btn-fullscreen'),
+      'btn-fullscreen-menu': $('btn-fullscreen-menu'),
       'btn-reset-world': $('btn-reset-world'),
       'btn-delete-save': $('btn-delete-save'),
       'btn-selftest-back': $('btn-selftest-back'),
@@ -279,6 +280,7 @@ class Game {
       this.player.yaw = Math.PI;
       this.player.pitch = 0;
       this.player.gamemode = gamemode;
+      this._setFlying(false);
       this.player.peaceful = peaceful;
       this.player.health = 20;
       this.player.hunger = 20;
@@ -398,6 +400,7 @@ class Game {
   respawn() {
     const spawn = this.world.gen.findSpawn();
     this.player.respawn(spawn);
+    this.touch?.setSneak(false);
     this.state = 'playing';
     this.menus.hideAll();
     if (!this.isTouch) this.input.lock();
@@ -433,12 +436,19 @@ class Game {
   }
 
   _syncFullscreenButton() {
-    const button = $('btn-fullscreen');
-    if (!button) return;
     const active = !!(document.fullscreenElement || document.webkitFullscreenElement);
-    button.setAttribute('aria-pressed', String(active));
-    button.setAttribute('aria-label', active ? 'Vollbildmodus beenden' : 'Vollbildmodus aktivieren');
-    button.title = active ? 'Vollbildmodus beenden' : 'Vollbildmodus aktivieren';
+    const label = active ? 'Vollbildmodus beenden' : 'Vollbildmodus aktivieren';
+    const button = $('btn-fullscreen');
+    if (button) {
+      button.setAttribute('aria-pressed', String(active));
+      button.setAttribute('aria-label', label);
+      button.title = label;
+    }
+    const menuButton = $('btn-fullscreen-menu');
+    if (menuButton) {
+      menuButton.setAttribute('aria-pressed', String(active));
+      menuButton.textContent = active ? '⛶ Vollbildmodus beenden' : '⛶ Vollbildmodus aktivieren';
+    }
   }
 
   pause() {
@@ -527,6 +537,8 @@ class Game {
   // Tastatur
   // =========================================================================
   _onKey(e) {
+    // Aktionen wie Flugmodus oder Spielmodus dürfen beim Gedrückthalten nicht mehrfach auslösen.
+    if (e.repeat) return;
     if (this.state === 'menu' || this.state === 'loading') return;
 
     switch (e.code) {
@@ -540,10 +552,7 @@ class Game {
         else if (this.state === 'inventory') this.closeInventory();
         break;
       case 'KeyF':
-        if (this.state === 'playing' && this.player.gamemode === 'creative') {
-          this.player.flying = !this.player.flying;
-          this.toast(this.player.flying ? 'Fliegen: AN' : 'Fliegen: AUS');
-        }
+        this._toggleFlight();
         break;
       case 'F3':
         e.preventDefault();
@@ -552,7 +561,7 @@ class Game {
       case 'KeyM':
         if (this.state === 'playing') {
           this.player.gamemode = this.player.gamemode === 'survival' ? 'creative' : 'survival';
-          if (this.player.gamemode === 'survival') this.player.flying = false;
+          if (this.player.gamemode === 'survival') this._setFlying(false);
           this.hud.setGamemodeLabel(this.player.gamemode, this.player.peaceful);
           this.toast(`Modus: ${this.player.gamemode}`);
         }
@@ -601,16 +610,32 @@ class Game {
         if (this.state === 'playing') {
           // Doppelsprung → Fliegen
           const now = performance.now();
-          if (now - this.doubleJumpTimer < 320 && this.player.gamemode === 'creative') {
-            this.player.flying = !this.player.flying;
-            this.toast(this.player.flying ? 'Fliegen: AN' : 'Fliegen: AUS');
-          }
+          if (now - this.doubleJumpTimer < 320) this._toggleFlight();
           this.doubleJumpTimer = now;
         }
         break;
       default:
         break;
     }
+  }
+
+  _setFlying(enabled) {
+    const flying = !!enabled && this.player.gamemode === 'creative';
+    if (this.player.flying !== flying) {
+      this.player.flying = flying;
+      this.player.velocity.y = 0;
+      this.player.fallDistance = 0;
+    }
+    // Der mobile Schleichen-Toggle steuert im Flug den Abstieg. Beim Wechsel des
+    // Flugmodus zurücksetzen, damit keine alte Abwärts-Eingabe den nächsten Flug blockiert.
+    this.touch?.setSneak(false);
+  }
+
+  _toggleFlight() {
+    if (this.state !== 'playing' || this.player.gamemode !== 'creative') return false;
+    this._setFlying(!this.player.flying);
+    this.toast(this.player.flying ? 'Fliegen: AN' : 'Fliegen: AUS');
+    return this.player.flying;
   }
 
   _onKeyUp(e) {
@@ -631,16 +656,8 @@ class Game {
         if (this.state === 'playing') this.openInventory();
         break;
       case 'fly':
-        if (this.state === 'playing' && this.player.gamemode === 'creative') {
-          this.player.flying = !this.player.flying;
-          this.toast(this.player.flying ? 'Fliegen: AN' : 'Fliegen: AUS');
-        }
-        break;
       case 'doubleJump':
-        if (this.state === 'playing' && this.player.gamemode === 'creative') {
-          this.player.flying = !this.player.flying;
-          this.toast(this.player.flying ? 'Fliegen: AN' : 'Fliegen: AUS');
-        }
+        this._toggleFlight();
         break;
       case 'debug':
         this.debug.toggle();

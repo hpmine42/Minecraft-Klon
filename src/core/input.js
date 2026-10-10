@@ -97,8 +97,8 @@ export class Input {
       forward,
       right,
       jump: this.isDown('Space'),
-      sneak: this.isDown('ShiftLeft') || this.isDown('ShiftRight') || this.isDown('ControlLeft'),
-      sprint: this.isDown('ControlLeft') || this.isDown('KeyR') || this.sprintToggle,
+      sneak: this.isDown('ShiftLeft') || this.isDown('ShiftRight'),
+      sprint: this.isDown('ControlLeft') || this.isDown('ControlRight') || this.isDown('KeyR') || this.sprintToggle,
     };
   }
 

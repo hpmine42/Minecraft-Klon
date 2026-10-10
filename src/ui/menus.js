@@ -82,6 +82,7 @@ export class Menus {
     });
     click('btn-selftest', () => this.cb.onSelfTest && this.cb.onSelfTest());
     click('btn-fullscreen', () => this.cb.onFullscreen && this.cb.onFullscreen());
+    click('btn-fullscreen-menu', () => this.cb.onFullscreen && this.cb.onFullscreen());
 
     // Einstellungen
     const bindRange = (id, key, format) => {
@@ -334,7 +335,11 @@ export class Menus {
 
     const slot = { el, canvas, count, dur, durFill: dur.firstChild, kind, index, stack: null };
 
-    el.addEventListener('touchstart', (e) => this._startInventoryTouch(e, kind, index), { passive: false });
+    if (typeof window !== 'undefined' && typeof window.PointerEvent === 'function') {
+      el.addEventListener('pointerdown', (e) => this._startInventoryPointer(e, kind, index), { passive: false });
+    } else {
+      el.addEventListener('touchstart', (e) => this._startInventoryTouch(e, kind, index), { passive: false });
+    }
     el.addEventListener('mousedown', (e) => {
       if (wasRecentTouch()) return;
       e.preventDefault();
@@ -347,9 +352,67 @@ export class Menus {
   _bindInventoryTouchDrag() {
     if (typeof document === 'undefined' || !document.addEventListener || this._inventoryDragBound) return;
     this._inventoryDragBound = true;
-    document.addEventListener('touchmove', (e) => this._moveInventoryTouch(e), { passive: false });
-    document.addEventListener('touchend', (e) => this._endInventoryTouch(e), { passive: false });
-    document.addEventListener('touchcancel', (e) => this._cancelInventoryTouch(e), { passive: false });
+    if (typeof window !== 'undefined' && typeof window.PointerEvent === 'function') {
+      document.addEventListener('pointermove', (e) => this._moveInventoryPointer(e), { passive: false });
+      document.addEventListener('pointerup', (e) => this._endInventoryPointer(e), { passive: false });
+      document.addEventListener('pointercancel', (e) => this._cancelInventoryPointer(e), { passive: false });
+    } else {
+      // Fallback für ältere Touch-Browser ohne Pointer Events.
+      document.addEventListener('touchmove', (e) => this._moveInventoryTouch(e), { passive: false });
+      document.addEventListener('touchend', (e) => this._endInventoryTouch(e), { passive: false });
+      document.addEventListener('touchcancel', (e) => this._cancelInventoryTouch(e), { passive: false });
+    }
+  }
+
+  _startInventoryPointer(e, kind, index) {
+    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+    if (e.isPrimary === false) return;
+    e.preventDefault();
+    e.stopPropagation();
+    markTouchEvent();
+    try { e.currentTarget?.setPointerCapture?.(e.pointerId); } catch { /* Der Dokument-Fallback reicht aus. */ }
+
+    const sourceStack = kind === 'result'
+      ? matchRecipe(this.craftGrid)
+      : kind === 'craft' ? this.craftGrid[index] : this.inventory.getSlot(index);
+    this._slotGesture = {
+      inputType: 'pointer',
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      canDrag: !this.heldStack && !!sourceStack,
+      dragging: false,
+      lastTarget: null,
+    };
+
+    // Tippen bleibt verfügbar: beim Drücken aufnehmen/ablegen, beim Ziehen
+    // wird das gewählte Item am Ziel abgelegt.
+    this._slotClick(kind, index);
+    if (this.heldStack) this._positionFloatingStack(e);
+  }
+
+  _moveInventoryPointer(e) {
+    const gesture = this._slotGesture;
+    if (!gesture || gesture.inputType !== 'pointer' || e.pointerId !== gesture.pointerId || !gesture.canDrag) return;
+    this._updateInventoryDrag(e, e);
+  }
+
+  _endInventoryPointer(e) {
+    const gesture = this._slotGesture;
+    if (!gesture || gesture.inputType !== 'pointer' || e.pointerId !== gesture.pointerId) return;
+    if (gesture.dragging) {
+      e.preventDefault();
+      const target = this._slotAtPoint(e.clientX, e.clientY) || gesture.lastTarget;
+      if (target) this._slotClick(target.kind, target.index);
+    }
+    this._clearInventoryDragTarget();
+    this._slotGesture = null;
+  }
+
+  _cancelInventoryPointer(e) {
+    if (this._slotGesture?.inputType !== 'pointer' || e.pointerId !== this._slotGesture.pointerId) return;
+    this._clearInventoryDragTarget();
+    this._slotGesture = null;
   }
 
   _startInventoryTouch(e, kind, index) {
@@ -363,6 +426,7 @@ export class Menus {
       : kind === 'craft' ? this.craftGrid[index] : this.inventory.getSlot(index);
     const canDrag = !this.heldStack && !!sourceStack;
     this._slotGesture = {
+      inputType: 'touch',
       touchId: touch?.identifier,
       startX: touch?.clientX ?? 0,
       startY: touch?.clientY ?? 0,
@@ -378,7 +442,7 @@ export class Menus {
 
   _touchForSlotGesture(e) {
     const gesture = this._slotGesture;
-    if (!gesture) return null;
+    if (!gesture || gesture.inputType !== 'touch') return null;
     const find = (list) => {
       if (!list) return null;
       const touches = Array.from(list);
@@ -390,17 +454,22 @@ export class Menus {
   _moveInventoryTouch(e) {
     const gesture = this._slotGesture;
     const touch = this._touchForSlotGesture(e);
-    if (!gesture || !touch || !gesture.canDrag) return;
+    if (!gesture || gesture.inputType === 'pointer' || !touch || !gesture.canDrag) return;
+    this._updateInventoryDrag(e, touch);
+  }
 
-    if (!gesture.dragging && Math.hypot(touch.clientX - gesture.startX, touch.clientY - gesture.startY) >= 8) {
+  _updateInventoryDrag(event, point) {
+    const gesture = this._slotGesture;
+    if (!gesture || !point || !gesture.canDrag) return;
+    if (!gesture.dragging && Math.hypot(point.clientX - gesture.startX, point.clientY - gesture.startY) >= 8) {
       gesture.dragging = true;
     }
     if (!gesture.dragging) return;
 
-    e.preventDefault();
+    event.preventDefault();
     markTouchEvent();
-    this._positionFloatingStack(touch);
-    this._setInventoryDragTarget(this._slotAtPoint(touch.clientX, touch.clientY));
+    this._positionFloatingStack(point);
+    this._setInventoryDragTarget(this._slotAtPoint(point.clientX, point.clientY));
   }
 
   _endInventoryTouch(e) {
@@ -619,7 +688,7 @@ export class Menus {
         <li><b>Auf Block tippen &amp; halten:</b> Block direkt unter dem Finger abbauen (wie Pocket Edition)</li>
         <li><b>Wischen:</b> Umsehen; beim Wischen wird nicht abgebaut</li>
         <li><b>⬆ Taste:</b> Springen (2× tippen = Fliegen an/aus)</li>
-        <li><b>⬇ Taste:</b> Schleichen (Tippen zum Umschalten)</li>
+        <li><b>⬇ Taste:</b> Schleichen umschalten; im Flug sinken (aktiv markiert)</li>
         <li><b>⛏ Taste:</b> Block abbauen / Mob angreifen (halten)</li>
         <li><b>▣ Taste:</b> Block platzieren / Item benutzen</li>
         <li><b>Rucksack:</b> Inventar & Crafting; Items antippen oder direkt ins 3×3-Feld ziehen</li>
