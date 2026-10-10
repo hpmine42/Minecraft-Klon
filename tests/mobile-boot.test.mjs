@@ -355,6 +355,24 @@ transferButton.dispatch('touchend', makeEvent([{ identifier: 34, clientX: 20, cl
 ok(!game.menus.singleTransferMode, 'Einzeltransfer lässt sich wieder ausschalten');
 game.menus._returnCraftGrid();
 
+// Mehrteilige Rezepte lassen sich durch getrennte Tipps auf die passenden Felder einsetzen.
+game.inventory.slots[12] = { id: BLOCK.PLANKS, count: 2, dur: null };
+game.menus.refreshInventory();
+transferButton.dispatch('touchend', makeEvent([{ identifier: 35, clientX: 20, clientY: 20 }]));
+const plankTransferSource = game.menus.invSlotEls.find((slot) => slot.index === 12);
+plankTransferSource.el.dispatch('pointerdown', makePointerEvent(36, 110, 300));
+document.dispatch('pointerup', makePointerEvent(36, 110, 300));
+game.menus.craftSlotEls[0].el.dispatch('pointerdown', makePointerEvent(37, 150, 350));
+document.dispatch('pointerup', makePointerEvent(37, 150, 350));
+game.menus.craftSlotEls[3].el.dispatch('pointerdown', makePointerEvent(38, 150, 350));
+document.dispatch('pointerup', makePointerEvent(38, 150, 350));
+ok(game.inventory.slots[12] === null && game.menus.craftGrid[0]?.id === BLOCK.PLANKS && game.menus.craftGrid[3]?.id === BLOCK.PLANKS,
+  'Zwei einzelne Zutaten landen auf zwei Crafting-Feldern');
+ok(game.menus.resultSlotEl.stack?.id === BLOCK.STICK,
+  'Einzeltransfer erlaubt auch mehrteilige Rezepte wie Stöcke');
+transferButton.dispatch('touchend', makeEvent([{ identifier: 39, clientX: 20, clientY: 20 }]));
+game.menus._returnCraftGrid();
+
 document._pointElement = null;
 invBtn.dispatch('touchstart', makeEvent([{ identifier: 8, clientX: 10, clientY: 10 }]));
 ok(game.state === 'playing', 'Inventar-Button schließt Inventar');
