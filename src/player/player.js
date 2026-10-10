@@ -178,9 +178,9 @@ export class Player {
 
     // Vertikal
     if (this.flying) {
-      let vy = 0;
-      if (input.jump) vy += speed;
-      if (input.sneak) vy -= speed;
+      // Aufsteigen hat Vorrang vor Absteigen. Auf Touch-Geräten bleibt Sneak ein
+      // Toggle; ohne diese Priorität würden Jump und Sneak die Flugsteuerung sperren.
+      const vy = input.jump ? speed : input.sneak ? -speed : 0;
       vel.y += (vy - vel.y) * Math.min(1, dt * 12);
     } else if (this.onLadder) {
       vel.y = -1.5;
@@ -365,8 +365,13 @@ export class Player {
     this.hunger = this.maxHunger;
     this.breath = this.breathMax;
     this.dead = false;
+    this.flying = false;
+    this.onGround = false;
+    this.sneaking = false;
+    this.sprinting = false;
     this.velocity = { x: 0, y: 0, z: 0 };
     this.fallDistance = 0;
+    this.justLanded = 0;
     if (spawnPos) {
       this.position = { ...spawnPos };
     }
@@ -377,7 +382,15 @@ export class Player {
   teleport(x, y, z) {
     this.position = { x, y, z };
     this.velocity = { x: 0, y: 0, z: 0 };
+    this.onGround = false;
+    this.sneaking = false;
+    this.sprinting = false;
+    this.inWater = false;
+    this.headInWater = false;
+    this.inLava = false;
+    this.onLadder = false;
     this.fallDistance = 0;
+    this.justLanded = 0;
   }
 
   toJSON() {
@@ -402,8 +415,8 @@ export class Player {
     this.health = data.health ?? 20;
     this.hunger = data.hunger ?? 20;
     this.breath = data.breath ?? 10;
-    this.flying = !!data.flying;
     this.gamemode = data.gamemode || 'survival';
+    this.flying = !!data.flying && this.gamemode === 'creative';
     this.peaceful = data.peaceful !== false;
   }
 }

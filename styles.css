@@ -353,6 +353,11 @@ html, body {
   background: rgba(255, 255, 255, 0.42);
   transform: scale(0.93);
 }
+.touch-btn.toggled {
+  border-color: rgba(126, 217, 87, 0.8);
+  background: rgba(126, 217, 87, 0.28);
+  box-shadow: 0 0 10px rgba(126, 217, 87, 0.25);
+}
 .touch-btn.big {
   width: 72px;
   height: 72px;

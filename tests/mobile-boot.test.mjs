@@ -336,6 +336,12 @@ fullscreenBtn.dispatch('touchend', makeEvent([{ identifier: 24, clientX: 20, cli
 await new Promise((r) => setTimeout(r, 0));
 ok(document.fullscreenElement === null, 'Vollbildknopf beendet den Vollbildmodus wieder');
 
+game.touch.setSneak(true);
+const flyingBeforeToggle = game.player.flying;
+game._toggleFlight();
+ok(game.player.flying !== flyingBeforeToggle && !game.touch.sneak,
+  'Flugmoduswechsel löscht den alten mobilen Abwärts-Toggle');
+
 // Pixel-Ratio für Handy begrenzt
 ok(game.engine.pixelRatio <= 1.75, `Pixel-Ratio gedrosselt (${game.engine.pixelRatio})`);
 

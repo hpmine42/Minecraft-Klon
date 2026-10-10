@@ -105,7 +105,12 @@ const world = new World(4242, 'flat', {});
 for (let i = 0; i < 3; i++) world.update(8, 8, 1, 100);
 
 const player = new Player(world);
+player.onGround = true;
+player.inWater = true;
+player.sneaking = true;
 player.teleport(8.5, 38, 8.5);
+ok(!player.onGround && !player.inWater && !player.sneaking,
+  'Teleport setzt veralteten Boden-, Wasser- und Schleichenstatus zurück');
 const input = { forward: 0, right: 0, jump: false, sneak: false, sprint: false };
 
 // Gravitation: fällt nach unten
@@ -153,6 +158,24 @@ for (let i = 0; i < 300; i++) player.update(1 / 60, input);
 ok(player.health < hpBefore || player.position.y <= 33.1, `Fallschaden oder Landung (HP ${player.health}, y=${player.position.y.toFixed(2)})`);
 ok(player.fallDistance === 0, 'Fall-Distanz zurückgesetzt');
 
+// Kreativflug: nach dem Abstieg am Boden muss Aufsteigen trotz aktivem Sneak-Toggle funktionieren.
+player.gamemode = 'creative';
+player.flying = true;
+player.teleport(8.5, 38, 8.5);
+player.flying = true;
+input.jump = false;
+input.sneak = true;
+for (let i = 0; i < 120; i++) player.update(1 / 60, input);
+const flightLandingY = player.position.y;
+ok(player.onGround && Math.abs(flightLandingY - 33) < 0.1, 'Kreativflug-Abstieg landet sauber auf dem Boden');
+input.jump = true; // Touch-Sneak bleibt bis zum nächsten Tap als Toggle aktiv.
+for (let i = 0; i < 20; i++) player.update(1 / 60, input);
+ok(player.position.y > flightLandingY + 0.3, 'Jump kann nach dem Abstieg trotz aktivem Sneak wieder aufsteigen');
+player.gamemode = 'survival';
+player.flying = false;
+input.jump = false;
+input.sneak = false;
+
 // Schwimmen: Wasserbecken
 for (let x = 6; x <= 11; x++) {
   for (let z = 6; z <= 11; z++) {
@@ -198,6 +221,11 @@ player.takeDamage(10, 'test');
 ok(player.dead, 'Spieler stirbt');
 player.respawn({ x: 1, y: 40, z: 1 });
 ok(!player.dead && player.health === 20, 'Respawn stellt Gesundheit wieder her');
+player.gamemode = 'creative';
+player.flying = true;
+player.onGround = true;
+player.respawn({ x: 2, y: 40, z: 2 });
+ok(!player.flying && !player.onGround, 'Respawn beendet Flugmodus und setzt den Bodenkontakt zurück');
 
 // Kreativmodus unverwundbar (außer Void)
 player.gamemode = 'creative';
@@ -221,6 +249,10 @@ const player2 = new Player(world);
 player2.fromJSON(pjson);
 ok(Math.abs(player2.yaw - 1.23) < 0.001, 'Spieler-Serialisierung (Yaw)');
 ok(player2.gamemode === 'survival', 'Spieler-Serialisierung (Modus)');
+player2.fromJSON({ gamemode: 'survival', flying: true });
+ok(!player2.flying, 'Ältere/fehlerhafte Spielstände können Fliegen nicht im Survival aktivieren');
+player2.fromJSON({ gamemode: 'creative', flying: true });
+ok(player2.flying, 'Kreativflug bleibt beim Laden erhalten');
 
 // ---- Welt: modifizierte Blöcke ---------------------------------------------
 const w2 = new World(777, 'normal', {});

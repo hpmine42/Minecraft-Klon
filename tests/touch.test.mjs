@@ -11,9 +11,20 @@ function ok(cond, msg) {
 // DOM-Stubs mit Event-Capture
 function makeEl() {
   const listeners = {};
+  const classes = new Set();
   return {
     listeners,
-    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+    classList: {
+      add(name) { classes.add(name); },
+      remove(name) { classes.delete(name); },
+      toggle(name, force) {
+        const next = force ?? !classes.has(name);
+        if (next) classes.add(name);
+        else classes.delete(name);
+        return next;
+      },
+      contains(name) { return classes.has(name); },
+    },
     style: {},
     addEventListener(type, fn) {
       (listeners[type] = listeners[type] || []).push(fn);
@@ -64,6 +75,7 @@ const touch = new TouchControls(els, {
   sensitivity: 0.004,
   onAction: (name) => actions.push(name),
 });
+ok(touch._lastJumpTap === -Infinity, 'Erster Sprung kann nicht als Doppeltipp zählen');
 
 // ---- Joystick --------------------------------------------------------------
 els.joystickZone.dispatch('touchstart', makeEvent([{ identifier: 1, clientX: 100, clientY: 300 }]));
@@ -145,19 +157,26 @@ pressed = touch.consumePressed();
 ok(pressed.use === true, 'Platzieren ausgelöst');
 
 // Sprung + Doppelsprung (Fliegen)
+const doubleJumpsBefore = actions.filter((action) => action === 'doubleJump').length;
 els.btnJump.dispatch('touchstart', makeEvent([{ identifier: 5, clientX: 10, clientY: 10 }]));
 ok(touch.jump === true, 'Sprung gehalten');
+ok(actions.filter((action) => action === 'doubleJump').length === doubleJumpsBefore,
+  'Erster Sprung nach dem Laden schaltet Fliegen nicht versehentlich ein');
 els.btnJump.dispatch('touchend', makeEvent([{ identifier: 5, clientX: 10, clientY: 10 }]));
 ok(touch.jump === false, 'Sprung losgelassen');
 // Zweiter Tap innerhalb von 320ms
 els.btnJump.dispatch('touchstart', makeEvent([{ identifier: 6, clientX: 10, clientY: 10 }]));
-ok(actions.includes('doubleJump'), 'Doppelsprung erkannt');
+ok(actions.filter((action) => action === 'doubleJump').length === doubleJumpsBefore + 1,
+  'Doppelsprung erkannt');
 
 // Sneak-Toggle
 els.btnSneak.dispatch('touchstart', makeEvent([{ identifier: 7, clientX: 10, clientY: 10 }]));
-ok(touch.sneak === true, 'Schleichen an');
+ok(touch.sneak === true && els.btnSneak.classList.contains('toggled'), 'Schleichen an und als Toggle sichtbar');
 els.btnSneak.dispatch('touchstart', makeEvent([{ identifier: 8, clientX: 10, clientY: 10 }]));
-ok(touch.sneak === false, 'Schleichen aus (Toggle)');
+ok(touch.sneak === false && !els.btnSneak.classList.contains('toggled'), 'Schleichen aus (Toggle)');
+touch.setSneak(true);
+touch.setSneak(false);
+ok(!touch.sneak && !els.btnSneak.classList.contains('toggled'), 'Flugmodus kann Sneak-Toggle zuverlässig zurücksetzen');
 
 // Fly-Button
 els.btnFly.dispatch('touchstart', makeEvent([{ identifier: 9, clientX: 10, clientY: 10 }]));

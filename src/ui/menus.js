@@ -619,7 +619,7 @@ export class Menus {
         <li><b>Auf Block tippen &amp; halten:</b> Block direkt unter dem Finger abbauen (wie Pocket Edition)</li>
         <li><b>Wischen:</b> Umsehen; beim Wischen wird nicht abgebaut</li>
         <li><b>⬆ Taste:</b> Springen (2× tippen = Fliegen an/aus)</li>
-        <li><b>⬇ Taste:</b> Schleichen (Tippen zum Umschalten)</li>
+        <li><b>⬇ Taste:</b> Schleichen umschalten; im Flug sinken (aktiv markiert)</li>
         <li><b>⛏ Taste:</b> Block abbauen / Mob angreifen (halten)</li>
         <li><b>▣ Taste:</b> Block platzieren / Item benutzen</li>
         <li><b>Rucksack:</b> Inventar & Crafting; Items antippen oder direkt ins 3×3-Feld ziehen</li>
