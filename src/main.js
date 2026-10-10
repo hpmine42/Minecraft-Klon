@@ -13,6 +13,7 @@ import { Interaction } from './player/interaction.js';
 import { MobManager } from './entities/mobs.js';
 import { ParticleSystem } from './entities/particles.js';
 import { HUD } from './ui/hud.js';
+import { BlockOutline } from './ui/block-outline.js';
 import { Menus } from './ui/menus.js';
 import { DebugOverlay } from './ui/debug.js';
 import { runSelfTest, renderSelfTest } from './ui/selftest.js';
@@ -49,6 +50,7 @@ class Game {
       antialias: !this.isTouch,
       maxPixelRatio: this.isTouch ? 1.75 : 2,
     });
+    this.blockOutline = new BlockOutline(this.engine.scene);
     this.atlasCanvas = createAtlasCanvas(1337);
     this._applyAtlas();
 
@@ -678,6 +680,7 @@ class Game {
     const dt = Math.min(0.05, (time - this.lastFrame) / 1000 || 0.016);
     this.lastFrame = time;
 
+    if (this.state !== 'playing') this.blockOutline?.hide();
     if (this.state === 'playing' || this.state === 'inventory' || this.state === 'paused' || this.state === 'dead') {
       if (this.state === 'playing') {
         this._updatePlaying(dt);
@@ -808,12 +811,16 @@ class Game {
       ? (this.touch.attack || pressed.attack || !!attackDirection)
       : this.input.attack;
 
-    this.interaction.update(dt, {
+    const interactionResult = this.interaction.update(dt, {
       attack: attackHeld,
       attackDirection,
       usePressed,
       pickPressed: pressed.pick || false,
     }, this.engine.camera);
+    const outlineTarget = this.state === 'playing' && !interactionResult.mobHit
+      ? this.interaction.currentTarget(attackDirection || player.lookDir())
+      : null;
+    this.blockOutline.update(outlineTarget);
 
     // ---- Mobs & Partikel ----------------------------------------------------
     this.mobs.update(dt, player, this.inventory, {

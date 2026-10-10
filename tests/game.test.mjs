@@ -4,6 +4,8 @@ import { BLOCKS, BLOCK, TOOL, breakSpeed, getDrop } from '../src/world/blocks.js
 import { Player, PHYS, PLAYER_HEIGHT } from '../src/player/player.js';
 import { World } from '../src/world/world.js';
 import { CHUNK_SIZE, blockIndex } from '../src/world/chunk.js';
+import { Interaction } from '../src/player/interaction.js';
+import { BlockOutline } from '../src/ui/block-outline.js';
 
 let passed = 0;
 let failed = 0;
@@ -266,6 +268,67 @@ for (const [pos, val] of w2.modified) {
 }
 w3.generateChunk(0, 0);
 ok(w3.getBlock(3, 50, 3) === BLOCK.GLASS, 'Modifikation nach Laden wiederhergestellt');
+
+// Zielkontur: sichtbar am getroffenen Block, folgt dem nächsten Treffer und blendet ohne Ziel aus.
+const outlineScene = {
+  children: [],
+  add(object) { this.children.push(object); },
+  remove(object) { this.children = this.children.filter((entry) => entry !== object); },
+};
+const outline = new BlockOutline(outlineScene);
+ok(outlineScene.children.includes(outline.mesh) && !outline.mesh.visible,
+  'Blockkontur wird anfangs verborgen in die Szene eingefügt');
+outline.update({ x: 2, y: 5, z: -1 });
+ok(outline.mesh.visible && outline.mesh.position.x === 2.5 && outline.mesh.position.y === 5.5 && outline.mesh.position.z === -0.5,
+  'Blockkontur liegt zentriert um den angeschauten Block');
+outline.update({ x: 3, y: 4, z: -1 });
+ok(outline.mesh.position.x === 3.5 && outline.mesh.position.y === 4.5,
+  'Blockkontur wechselt beim Umsehen direkt zum nächsten Ziel');
+outline.update(null);
+ok(!outline.mesh.visible, 'Blockkontur wird ohne Blockziel ausgeblendet');
+outline.dispose();
+ok(!outlineScene.children.includes(outline.mesh), 'Blockkontur gibt Szenenobjekte beim Dispose frei');
+
+// Gedrückt gehaltenes Abbauen zielt pro Frame neu: nach dem ersten Block kann der Blick
+// nach unten wechseln und der nächste Block wird ohne erneutes Drücken abgebaut.
+const firstMineHit = { x: 3, y: 3, z: 3, id: BLOCK.DIRT, distance: 1, nx: 0, ny: 0, nz: -1 };
+const lowerMineHit = { x: 3, y: 2, z: 3, id: BLOCK.DIRT, distance: 1, nx: 0, ny: 1, nz: 0 };
+const aliveMineTargets = new Set(['3,3,3', '3,2,3']);
+const minedTargets = [];
+const aim = { direction: { x: 0, y: 0, z: -1 } };
+const miningWorld = {
+  raycast(_origin, direction) {
+    const hit = direction.y < -0.5 ? lowerMineHit : firstMineHit;
+    return aliveMineTargets.has(`${hit.x},${hit.y},${hit.z}`) ? hit : null;
+  },
+  setBlock(x, y, z, id) {
+    if (id === BLOCK.AIR) {
+      aliveMineTargets.delete(`${x},${y},${z}`);
+      minedTargets.push(`${x},${y},${z}`);
+    }
+  },
+  getBlock: () => BLOCK.AIR,
+};
+const miningPlayer = {
+  gamemode: 'creative',
+  attackCooldown: 0,
+  exhaustion: 0,
+  eyePosition: () => ({ x: 3.5, y: 4.5, z: 3.5 }),
+  lookDir: () => aim.direction,
+};
+const miningMobs = { raycastMob: () => null, items: [], scene: { add() {} } };
+const miningParticles = { blockBreak() {} };
+const miningAudio = { dig() {} };
+const miningInteraction = new Interaction(
+  miningWorld, miningPlayer, { held: () => null }, miningMobs, miningParticles, miningAudio,
+);
+const firstMineResult = miningInteraction.update(0.5, { attack: true }, null);
+ok(firstMineResult.blockHit?.y === 3 && minedTargets[0] === '3,3,3',
+  'Gedrückthalten baut den ersten Block ab');
+aim.direction = { x: 0, y: -1, z: 0 };
+const nextMineResult = miningInteraction.update(0.5, { attack: true }, null);
+ok(nextMineResult.blockHit?.y === 2 && minedTargets[1] === '3,2,3',
+  'Blickwechsel nach unten baut den nächsten Block ohne Loslassen ab');
 
 console.log(`\n${passed} bestanden, ${failed} fehlgeschlagen`);
 if (failed > 0) process.exit(1);

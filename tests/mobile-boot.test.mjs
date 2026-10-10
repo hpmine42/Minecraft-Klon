@@ -8,7 +8,7 @@ function makeEl(id) {
   return {
     id,
     listeners,
-    style: {},
+    style: { setProperty() {} },
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
     children: [],
     dataset: {},
@@ -265,23 +265,33 @@ const targetBlock = {
   y: Math.floor(eye.y),
   z: Math.floor(game.player.position.z) - 3,
 };
-game.world.setBlock(targetBlock.x, targetBlock.y, targetBlock.z, BLOCK.FLOWER_RED);
+game.world.setBlock(targetBlock.x, targetBlock.y, targetBlock.z, BLOCK.DIRT);
 const directRay = game.world.raycast(eye, game.player.lookDir(), 5.2);
-ok(directRay?.id === BLOCK.FLOWER_RED, 'Testblume liegt im Blickfeld');
+ok(directRay?.id === BLOCK.DIRT, 'Testblock liegt im Blickfeld');
 const raycastMob = game.mobs.raycastMob;
 game.mobs.raycastMob = () => null; // deterministisch auf den Block fokussieren
 const interactionUpdate = game.interaction.update.bind(game.interaction);
+const outlineUpdate = game.blockOutline.update.bind(game.blockOutline);
 let mineFrames = 0;
+let outlineShownWhileMining = false;
 game.interaction.update = (dt, actions, camera) => {
   if (actions.attack && actions.attackDirection) mineFrames++;
   return interactionUpdate(dt, actions, camera);
 };
+game.blockOutline.update = (hit) => {
+  outlineUpdate(hit);
+  if (mineFrames > 0 && hit?.x === targetBlock.x && hit?.y === targetBlock.y && hit?.z === targetBlock.z) {
+    outlineShownWhileMining ||= game.blockOutline.mesh.visible;
+  }
+};
 lookZone.dispatch('touchstart', makeEvent([{ identifier: 12, clientX: 195, clientY: 422 }]));
-await new Promise((r) => setTimeout(r, 420));
+await new Promise((r) => setTimeout(r, 760));
 lookZone.dispatch('touchend', makeEvent([{ identifier: 12, clientX: 195, clientY: 422 }]));
 game.mobs.raycastMob = raycastMob;
 game.interaction.update = interactionUpdate;
+game.blockOutline.update = outlineUpdate;
 ok(mineFrames > 0, 'Mobile-Long-Press wird im Spiel als gehaltener Abbau verarbeitet');
+ok(outlineShownWhileMining, 'Zielkontur bleibt beim mobilen Long-Press auf dem Block sichtbar');
 ok(game.world.getBlock(targetBlock.x, targetBlock.y, targetBlock.z) === BLOCK.AIR,
   'Gedrückthalten auf dem Block baut ihn direkt ab');
 
