@@ -14,6 +14,8 @@ export class Menus {
     this.heldStack = null;
     this._slotGesture = null;
     this.selectedSlot = -1;
+    this.singleTransferMode = false;
+    this.transferSourceIndex = -1;
     this.activeScreen = null;
     this.recipeList = listRecipes();
 
@@ -25,12 +27,14 @@ export class Menus {
   // Screen-Verwaltung
   // -------------------------------------------------------------------------
   showScreen(name) {
+    const leavingInventory = this.activeScreen === 'inventory-screen' && name !== 'inventory-screen';
     const screens = ['main-menu', 'pause-menu', 'settings-screen', 'inventory-screen', 'death-screen', 'help-screen', 'loading-screen', 'selftest-screen'];
     for (const s of screens) {
       const el = this._el(s);
       if (el) el.classList.toggle('visible', s === name);
     }
     this.activeScreen = name;
+    if (leavingInventory) this._setSingleTransferMode(false);
     if (name === 'inventory-screen') {
       this.refreshInventory();
     }
@@ -202,6 +206,34 @@ export class Menus {
     craftLabel.textContent = 'Werkbank / Crafting (3×3)';
     craftWrap.appendChild(craftLabel);
 
+    const transferControls = document.createElement('div');
+    transferControls.className = 'craft-transfer-controls';
+    const transferButton = document.createElement('button');
+    transferButton.type = 'button';
+    transferButton.className = 'craft-transfer-toggle';
+    transferButton.textContent = 'Einzeltransfer einschalten';
+    transferButton.setAttribute('aria-pressed', 'false');
+    const transferStatus = document.createElement('div');
+    transferStatus.className = 'craft-transfer-status';
+    transferStatus.setAttribute('aria-live', 'polite');
+    transferStatus.textContent = 'Ohne Ziehen einzelne Zutaten aus dem Inventar ins 3×3-Feld legen.';
+    transferButton.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (wasRecentTouch()) return;
+      this._toggleSingleTransferMode();
+    });
+    transferButton.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      markTouchEvent();
+      this._toggleSingleTransferMode();
+    });
+    transferControls.appendChild(transferButton);
+    transferControls.appendChild(transferStatus);
+    craftWrap.appendChild(transferControls);
+    this.craftWrap = craftWrap;
+    this.singleTransferButton = transferButton;
+    this.transferStatus = transferStatus;
+
     const craftArea = document.createElement('div');
     craftArea.className = 'craft-area';
     const grid = document.createElement('div');
@@ -299,6 +331,7 @@ export class Menus {
     const close = this.els['btn-close-inventory'];
     if (close) {
       const closeFn = () => {
+        this._setSingleTransferMode(false);
         this._returnCraftGrid();
         this._dropHeld();
         this.cb.onCloseInventory && this.cb.onCloseInventory();
@@ -380,7 +413,7 @@ export class Menus {
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
-      canDrag: !this.heldStack && !!sourceStack,
+      canDrag: !this.singleTransferMode && !this.heldStack && !!sourceStack,
       dragging: false,
       lastTarget: null,
     };
@@ -424,7 +457,7 @@ export class Menus {
     const sourceStack = kind === 'result'
       ? matchRecipe(this.craftGrid)
       : kind === 'craft' ? this.craftGrid[index] : this.inventory.getSlot(index);
-    const canDrag = !this.heldStack && !!sourceStack;
+    const canDrag = !this.singleTransferMode && !this.heldStack && !!sourceStack;
     this._slotGesture = {
       inputType: 'touch',
       touchId: touch?.identifier,
@@ -530,9 +563,87 @@ export class Menus {
     floating.style.top = `${top}px`;
   }
 
+  _toggleSingleTransferMode() {
+    this._setSingleTransferMode(!this.singleTransferMode);
+  }
+
+  _setSingleTransferMode(active) {
+    active = !!active;
+    if (active === this.singleTransferMode) return;
+    this._clearInventoryDragTarget();
+    this._slotGesture = null;
+    if (active && this.heldStack) this._dropHeld();
+
+    this.singleTransferMode = active;
+    this.transferSourceIndex = -1;
+    if (this.singleTransferButton) {
+      this.singleTransferButton.textContent = active
+        ? 'Einzeltransfer beenden'
+        : 'Einzeltransfer einschalten';
+      this.singleTransferButton.setAttribute('aria-pressed', String(active));
+      this.singleTransferButton.classList.toggle('active', active);
+    }
+    this.refreshInventory();
+  }
+
+  _selectTransferSource(index) {
+    const stack = this.inventory.getSlot(index);
+    if (!stack || stack.count < 1) {
+      this.transferSourceIndex = -1;
+      this.refreshInventory();
+      if (this.transferStatus) this.transferStatus.textContent = 'Der Inventar-Slot ist leer. Wähle einen belegten Slot.';
+      return;
+    }
+    this.transferSourceIndex = index;
+    this.refreshInventory();
+    this.craftWrap?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  _transferOneToCraft(index) {
+    const sourceIndex = this.transferSourceIndex;
+    const source = sourceIndex >= 0 ? this.inventory.getSlot(sourceIndex) : null;
+    if (!source || source.count < 1) {
+      this.transferSourceIndex = -1;
+      this.refreshInventory();
+      return;
+    }
+
+    const target = this.craftGrid[index];
+    if (target) {
+      const maxStack = BLOCKS[source.id]?.maxStack || 64;
+      const canStack = target.id === source.id
+        && source.dur == null
+        && target.dur == null
+        && target.count < maxStack;
+      if (!canStack) {
+        if (this.transferStatus) {
+          this.transferStatus.textContent = target.id !== source.id
+            ? `Dieses Feld enthält ${getName(target.id)}. Wähle ein leeres oder passendes Feld.`
+            : 'Dieser Stapel ist voll. Wähle ein anderes Crafting-Feld.';
+        }
+        return;
+      }
+      target.count += 1;
+    } else {
+      this.craftGrid[index] = { id: source.id, count: 1, dur: source.dur ?? null };
+    }
+
+    source.count -= 1;
+    if (source.count <= 0) {
+      this.inventory.setSlot(sourceIndex, null);
+      this.transferSourceIndex = -1;
+    }
+    this.refreshInventory();
+  }
+
   _slotClick(kind, index) {
     if (kind === 'result') {
       this._takeCraftResult();
+      return;
+    }
+    if (this.singleTransferMode) {
+      if (kind === 'inv') this._selectTransferSource(index);
+      else if (kind === 'craft') this._transferOneToCraft(index);
       return;
     }
     if (kind === 'craft') {
@@ -648,12 +759,29 @@ export class Menus {
 
     for (const slot of this.invSlotEls) {
       drawSlot(slot, this.inventory.getSlot(slot.index));
+      slot.el.classList.toggle(
+        'transfer-source-selected',
+        this.singleTransferMode && slot.index === this.transferSourceIndex,
+      );
     }
     for (let i = 0; i < 9; i++) {
       drawSlot(this.craftSlotEls[i], this.craftGrid[i]);
     }
     const result = matchRecipe(this.craftGrid);
     drawSlot(this.resultSlotEl, result ? { id: result.id, count: result.count, dur: null } : null);
+
+    if (this.transferStatus) {
+      const selectedSource = this.transferSourceIndex >= 0
+        ? this.inventory.getSlot(this.transferSourceIndex)
+        : null;
+      if (!this.singleTransferMode) {
+        this.transferStatus.textContent = 'Einzeltransfer: Inventar-Slot wählen, dann ein 3×3-Feld antippen. Pro Tippen wird 1 Item gelegt.';
+      } else if (!selectedSource) {
+        this.transferStatus.textContent = 'Schritt 1: Tippe einen belegten Inventar-Slot an.';
+      } else {
+        this.transferStatus.textContent = `Gewählt: ${getName(selectedSource.id)} ×${selectedSource.count}. Tippe ein Crafting-Feld an; je Tippen wandert 1 Item.`;
+      }
+    }
 
     // Floating stack
     if (this.floatingEl) {
@@ -692,6 +820,7 @@ export class Menus {
         <li><b>⛏ Taste:</b> Block abbauen / Mob angreifen (halten)</li>
         <li><b>▣ Taste:</b> Block platzieren / Item benutzen</li>
         <li><b>Rucksack:</b> Inventar & Crafting; Items antippen oder direkt ins 3×3-Feld ziehen</li>
+        <li><b>Einzeltransfer:</b> Button drücken, Inventar-Slot wählen und Crafting-Feld antippen; pro Tipp wird ein Item gelegt</li>
         <li><b>⛶ Taste:</b> Vollbild ein- und ausschalten</li>
         <li><b>⚙ Taste:</b> Pause / Einstellungen</li>
         <li><b>Hotbar:</b> Antippen zum Itemwechsel</li>

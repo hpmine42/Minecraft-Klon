@@ -329,6 +329,32 @@ ok(game.menus.craftGrid[0]?.id === BLOCK.COBBLESTONE,
   'Inventar-Items lassen sich weiterhin per Antippen und erneutem Antippen ablegen');
 game.menus._returnCraftGrid();
 
+// Einzeltransfer-Modus: Slot auswählen, dann pro Crafting-Tipp genau ein Item einlegen.
+game.inventory.slots[11] = { id: BLOCK.LOG, count: 2, dur: null };
+game.menus.refreshInventory();
+const transferButton = game.menus.singleTransferButton;
+transferButton.dispatch('touchend', makeEvent([{ identifier: 30, clientX: 20, clientY: 20 }]));
+ok(game.menus.singleTransferMode, 'Einzeltransfer-Button aktiviert den Einlege-Modus');
+const transferSource = game.menus.invSlotEls.find((slot) => slot.index === 11);
+transferSource.el.dispatch('pointerdown', makePointerEvent(31, 110, 300));
+document.dispatch('pointerup', makePointerEvent(31, 110, 300));
+ok(game.menus.transferSourceIndex === 11 && game.menus.heldStack === null,
+  'Inventar-Slot wird ausgewählt, ohne den ganzen Stapel aufzunehmen');
+const transferTarget = game.menus.craftSlotEls[4];
+transferTarget.el.dispatch('pointerdown', makePointerEvent(32, 150, 350));
+document.dispatch('pointerup', makePointerEvent(32, 150, 350));
+ok(game.inventory.slots[11]?.count === 1 && game.menus.craftGrid[4]?.count === 1 && game.menus.heldStack === null,
+  'Erster Tipp legt genau ein Item ein und lässt den restlichen Stapel im Inventar');
+ok(game.menus.resultSlotEl.stack?.id === BLOCK.PLANKS,
+  'Einzeltransfer aktualisiert sofort das Crafting-Ergebnis');
+transferTarget.el.dispatch('pointerdown', makePointerEvent(33, 150, 350));
+document.dispatch('pointerup', makePointerEvent(33, 150, 350));
+ok(game.inventory.slots[11] === null && game.menus.craftGrid[4]?.count === 2,
+  'Weiteres Tippen legt jeweils nur ein zusätzliches Item ein');
+transferButton.dispatch('touchend', makeEvent([{ identifier: 34, clientX: 20, clientY: 20 }]));
+ok(!game.menus.singleTransferMode, 'Einzeltransfer lässt sich wieder ausschalten');
+game.menus._returnCraftGrid();
+
 document._pointElement = null;
 invBtn.dispatch('touchstart', makeEvent([{ identifier: 8, clientX: 10, clientY: 10 }]));
 ok(game.state === 'playing', 'Inventar-Button schließt Inventar');
