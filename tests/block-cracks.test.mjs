@@ -56,15 +56,21 @@ ok(cracks.mesh.position.x === 4.5 && cracks.mesh.position.y === 5.5 && cracks.me
 const stageZeroCore = new Set(context.pixels
   .filter((pixel) => pixel.color.includes('28,28,28'))
   .map((pixel) => `${pixel.x},${pixel.y}`));
+const initialCoordinates = [...stageZeroCore].map((pixel) => pixel.split(',').map(Number));
+ok(stageZeroCore.size === 3
+  && initialCoordinates.every(([x, y]) => x >= 7 && x <= 9 && y >= 7 && y <= 8),
+  'Abbau beginnt mit nur drei Pixeln genau in der Mitte, nicht in einer Ecke');
 cracks.update({ x: 4, y: 5, z: -2 }, 0.68);
 const stageSixCore = new Set(context.pixels
   .filter((pixel) => pixel.color.includes('28,28,28'))
   .map((pixel) => `${pixel.x},${pixel.y}`));
-ok(cracks.stage === 6 && stageSixCore.size > stageZeroCore.size
+ok(cracks.stage === 6 && stageSixCore.size > stageZeroCore.size && stageSixCore.size <= 16
   && [...stageZeroCore].every((pixel) => stageSixCore.has(pixel)),
-'Feste Rissstufen erweitern das vorhandene Muster ohne zufällige Sprünge');
+  'Feste Rissstufen ergänzen nur wenige verbundene Pixel, ohne Sprünge oder Überladung');
 cracks.update({ x: 4, y: 5, z: -2 }, 1);
-ok(cracks.stage === 9, 'Abbauschluss zeigt die dichteste der zehn Rissstufen');
+const finalCoreCount = context.pixels.filter((pixel) => pixel.color.includes('28,28,28')).length;
+ok(cracks.stage === 9 && finalCoreCount <= 24,
+  'Abbauschluss zeigt die dichteste, aber weiterhin übersichtliche Rissstufe');
 const finalPattern = JSON.stringify(context.pixels);
 cracks._drawStage(9);
 ok(JSON.stringify(context.pixels) === finalPattern,
