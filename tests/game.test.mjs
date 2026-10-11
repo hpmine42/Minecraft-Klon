@@ -276,8 +276,11 @@ const outlineScene = {
   remove(object) { this.children = this.children.filter((entry) => entry !== object); },
 };
 const outline = new BlockOutline(outlineScene);
-ok(outlineScene.children.includes(outline.mesh) && !outline.mesh.visible && outline.mesh.children.length === 2,
-  'Kontrastreiche Doppelkontur wird anfangs verborgen in die Szene eingefügt');
+ok(outlineScene.children.includes(outline.mesh) && !outline.mesh.visible
+  && outline.mesh.isLineSegments && outline.material.color.getHex() === 0x050505,
+  'Einzelne schwarze Blockkontur wird anfangs verborgen in die Szene eingefügt');
+ok(outline.material.depthTest && !outline.material.depthWrite && outline.mesh.renderOrder === 10,
+  'Blockkontur blendet verdeckte Kanten per Tiefenprüfung aus');
 outline.update({ x: 2, y: 5, z: -1 });
 ok(outline.mesh.visible && outline.mesh.position.x === 2.5 && outline.mesh.position.y === 5.5 && outline.mesh.position.z === -0.5,
   'Blockkontur liegt zentriert um den angeschauten Block');
@@ -317,7 +320,8 @@ const miningPlayer = {
   lookDir: () => aim.direction,
 };
 const miningMobs = { raycastMob: () => null, items: [], scene: { add() {} } };
-const miningParticles = { blockBreak() {} };
+const miningParticleCalls = [];
+const miningParticles = { blockBreak(...args) { miningParticleCalls.push(args); } };
 const miningAudio = { dig() {} };
 const miningInteraction = new Interaction(
   miningWorld, miningPlayer, { held: () => null }, miningMobs, miningParticles, miningAudio,
@@ -325,6 +329,9 @@ const miningInteraction = new Interaction(
 const firstMineResult = miningInteraction.update(0.5, { attack: true }, null);
 ok(firstMineResult.blockHit?.y === 3 && minedTargets[0] === '3,3,3',
   'Gedrückthalten baut den ersten Block ab');
+ok(miningParticleCalls.some((call) => call[4] === 1)
+  && miningParticleCalls.some((call) => call[4] === 14),
+  'Bestehende Abbau- und Bruchpartikel bleiben neben den Rissen erhalten');
 aim.direction = { x: 0, y: -1, z: 0 };
 const nextMineResult = miningInteraction.update(0.5, { attack: true }, null);
 ok(nextMineResult.blockHit?.y === 2 && minedTargets[1] === '3,2,3',

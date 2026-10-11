@@ -14,6 +14,7 @@ import { MobManager } from './entities/mobs.js';
 import { ParticleSystem } from './entities/particles.js';
 import { HUD } from './ui/hud.js';
 import { BlockOutline } from './ui/block-outline.js';
+import { BlockCracks } from './ui/block-cracks.js';
 import { Menus } from './ui/menus.js';
 import { DebugOverlay } from './ui/debug.js';
 import { runSelfTest, renderSelfTest } from './ui/selftest.js';
@@ -51,6 +52,7 @@ class Game {
       maxPixelRatio: this.isTouch ? 1.75 : 2,
     });
     this.blockOutline = new BlockOutline(this.engine.scene);
+    this.blockCracks = new BlockCracks(this.engine.scene);
     this.atlasCanvas = createAtlasCanvas(1337);
     this._applyAtlas();
 
@@ -680,7 +682,10 @@ class Game {
     const dt = Math.min(0.05, (time - this.lastFrame) / 1000 || 0.016);
     this.lastFrame = time;
 
-    if (this.state !== 'playing') this.blockOutline?.hide();
+    if (this.state !== 'playing') {
+      this.blockOutline?.hide();
+      this.blockCracks?.hide();
+    }
     if (this.state === 'playing' || this.state === 'inventory' || this.state === 'paused' || this.state === 'dead') {
       if (this.state === 'playing') {
         this._updatePlaying(dt);
@@ -821,6 +826,16 @@ class Game {
       ? this.interaction.currentTarget(attackDirection || player.lookDir())
       : null;
     this.blockOutline.update(outlineTarget);
+
+    const breakTarget = this.interaction.breakTarget;
+    const crackTarget = this.state === 'playing' && !interactionResult.mobHit
+      && breakTarget && interactionResult.blockHit
+      && breakTarget.x === interactionResult.blockHit.x
+      && breakTarget.y === interactionResult.blockHit.y
+      && breakTarget.z === interactionResult.blockHit.z
+      ? interactionResult.blockHit
+      : null;
+    this.blockCracks.update(crackTarget, this.interaction.breakFraction);
 
     // ---- Mobs & Partikel ----------------------------------------------------
     this.mobs.update(dt, player, this.inventory, {
