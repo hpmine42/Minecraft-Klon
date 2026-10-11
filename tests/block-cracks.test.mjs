@@ -68,9 +68,21 @@ ok(cracks.stage === 6 && stageSixCore.size > stageZeroCore.size && stageSixCore.
   && [...stageZeroCore].every((pixel) => stageSixCore.has(pixel)),
   'Feste Rissstufen ergänzen nur wenige verbundene Pixel, ohne Sprünge oder Überladung');
 cracks.update({ x: 4, y: 5, z: -2 }, 1);
-const finalCoreCount = context.pixels.filter((pixel) => pixel.color.includes('28,28,28')).length;
-ok(cracks.stage === 9 && finalCoreCount <= 24,
-  'Abbauschluss zeigt die dichteste, aber weiterhin übersichtliche Rissstufe');
+const finalCorePixels = new Set(context.pixels
+  .filter((pixel) => pixel.color.includes('28,28,28'))
+  .map((pixel) => `${pixel.x},${pixel.y}`));
+const finalCoreCount = finalCorePixels.size;
+const finalCoordinates = [...finalCorePixels].map((pixel) => pixel.split(',').map(Number));
+const directionalSpread = [
+  finalCoordinates.some(([x, y]) => x > 8 && y < 8),
+  finalCoordinates.some(([x, y]) => x < 8 && y < 8),
+  finalCoordinates.some(([x, y]) => x < 8 && y > 8),
+  finalCoordinates.some(([x, y]) => x > 8 && y > 8),
+  finalCoordinates.some(([x, y]) => x === 8 && y < 8),
+  finalCoordinates.some(([x, y]) => x === 8 && y > 8),
+];
+ok(cracks.stage === 9 && finalCoreCount <= 24 && directionalSpread.every(Boolean),
+  'Risse verzweigen sich in mehrere Richtungen, bleiben aber übersichtlich');
 const finalPattern = JSON.stringify(context.pixels);
 cracks._drawStage(9);
 ok(JSON.stringify(context.pixels) === finalPattern,
