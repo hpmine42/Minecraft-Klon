@@ -9,26 +9,19 @@ const CRACK_EDGE = 'rgba(112,112,112,0.82)';
 // springen die Risse nicht zufällig über die Fläche und bleiben wie Minecraft
 // in jeder Stufe pixelgenau gleich.
 const CRACK_SEGMENTS = [
-  { stage: 0, points: [[7, 7], [8, 6], [7, 5], [8, 4]] },
-  { stage: 0, points: [[7, 7], [6, 8], [5, 8]] },
-  { stage: 1, points: [[8, 4], [7, 3], [6, 3], [5, 2]] },
-  { stage: 1, points: [[8, 6], [9, 7], [10, 6], [11, 7]] },
-  { stage: 2, points: [[6, 3], [6, 2], [5, 1], [4, 1], [3, 0]] },
-  { stage: 2, points: [[11, 7], [12, 6], [13, 6], [14, 5], [15, 5]] },
-  { stage: 3, points: [[5, 8], [4, 9], [3, 9], [2, 10]] },
-  { stage: 3, points: [[3, 9], [3, 10], [2, 11], [3, 12], [2, 13], [1, 14]] },
-  { stage: 4, points: [[10, 6], [11, 7], [11, 8], [12, 8], [13, 9], [14, 9]] },
-  { stage: 4, points: [[12, 8], [12, 9], [13, 10], [12, 11], [13, 12], [14, 13]] },
-  { stage: 5, points: [[6, 8], [5, 7], [4, 7], [3, 6], [2, 6], [1, 5], [0, 5]] },
-  { stage: 5, points: [[13, 9], [14, 8], [15, 8]] },
-  { stage: 6, points: [[7, 7], [8, 8], [8, 9], [9, 10], [10, 11], [11, 12]] },
-  { stage: 6, points: [[11, 12], [10, 13], [11, 14], [10, 15]] },
-  { stage: 7, points: [[11, 7], [11, 6], [10, 5], [10, 4], [9, 3], [10, 2], [9, 1], [10, 0]] },
-  { stage: 7, points: [[3, 9], [2, 8], [1, 8], [0, 7]] },
-  { stage: 8, points: [[2, 13], [1, 12], [0, 11]] },
-  { stage: 8, points: [[13, 12], [14, 13], [14, 14], [15, 15]] },
-  { stage: 9, points: [[5, 2], [4, 3], [3, 4], [2, 5], [1, 5]] },
-  { stage: 9, points: [[8, 9], [7, 10], [7, 11], [8, 12], [7, 13], [8, 14], [7, 15]] },
+  // Startpunkt der ersten Stufe liegt in der Flächenmitte; zunächst nur drei Pixel.
+  { stage: 0, points: [[7, 7], [8, 8], [9, 7]] },
+  // Eine einzige Hauptfissur wächst schrittweise nach oben rechts weiter.
+  { stage: 1, points: [[9, 7], [10, 6], [10, 5]] },
+  { stage: 2, points: [[10, 5], [9, 4], [10, 3]] },
+  // Erst ab Stufe drei kommt eine kurze, mit der Mitte verbundene Verzweigung hinzu.
+  { stage: 3, points: [[8, 8], [7, 9], [6, 9]] },
+  { stage: 4, points: [[6, 9], [5, 10], [4, 10]] },
+  { stage: 5, points: [[10, 5], [11, 5], [12, 4]] },
+  { stage: 6, points: [[12, 4], [12, 3], [13, 2]] },
+  { stage: 7, points: [[9, 7], [9, 8], [10, 9]] },
+  { stage: 8, points: [[10, 9], [11, 10], [12, 10]] },
+  { stage: 9, points: [[7, 9], [7, 10], [8, 11], [9, 12]] },
 ];
 
 function directionOf(points, index) {
