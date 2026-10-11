@@ -47,18 +47,28 @@ cracks.update({ x: 4, y: 5, z: -2 }, 0.01);
 ok(cracks.mesh.visible && cracks.stage === 0 && context.pixels.length > 0,
   'Erste pixelige Minecraft-Riss-Stufe erscheint beim Abbaubeginn');
 ok(context.pixels.every((pixel) => pixel.width === 1 && pixel.height === 1)
-  && context.pixels.some((pixel) => pixel.color.includes('24,24,24'))
-  && context.pixels.some((pixel) => pixel.color.includes('92,92,92')),
-'Risse bestehen aus scharf abgegrenzten dunklen und grauen Pixeln');
+  && context.pixels.some((pixel) => pixel.color.includes('28,28,28'))
+  && context.pixels.some((pixel) => pixel.color.includes('112,112,112')),
+  'Risse bestehen aus scharf abgegrenzten dunklen und grauen Pixeln');
 ok(cracks.mesh.position.x === 4.5 && cracks.mesh.position.y === 5.5 && cracks.mesh.position.z === -1.5,
   'Risse sitzen auf dem aktuell abgebauten Block');
 
-const earlyPixelCount = context.pixels.length;
+const stageZeroCore = new Set(context.pixels
+  .filter((pixel) => pixel.color.includes('28,28,28'))
+  .map((pixel) => `${pixel.x},${pixel.y}`));
 cracks.update({ x: 4, y: 5, z: -2 }, 0.68);
-ok(cracks.stage === 6 && context.pixels.length > earlyPixelCount,
-  'Rissmuster wird mit dem Fortschritt dichter und verzweigter');
+const stageSixCore = new Set(context.pixels
+  .filter((pixel) => pixel.color.includes('28,28,28'))
+  .map((pixel) => `${pixel.x},${pixel.y}`));
+ok(cracks.stage === 6 && stageSixCore.size > stageZeroCore.size
+  && [...stageZeroCore].every((pixel) => stageSixCore.has(pixel)),
+'Feste Rissstufen erweitern das vorhandene Muster ohne zufällige Sprünge');
 cracks.update({ x: 4, y: 5, z: -2 }, 1);
 ok(cracks.stage === 9, 'Abbauschluss zeigt die dichteste der zehn Rissstufen');
+const finalPattern = JSON.stringify(context.pixels);
+cracks._drawStage(9);
+ok(JSON.stringify(context.pixels) === finalPattern,
+  'Dieselbe Abbaustufe zeichnet bei jedem Block exakt dasselbe Pixelmuster');
 
 cracks.update(null, 0.68);
 ok(!cracks.mesh.visible, 'Risse verschwinden, wenn kein Block mehr abgebaut wird');
