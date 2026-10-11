@@ -9,19 +9,21 @@ const CRACK_EDGE = 'rgba(112,112,112,0.82)';
 // springen die Risse nicht zufällig über die Fläche und bleiben wie Minecraft
 // in jeder Stufe pixelgenau gleich.
 const CRACK_SEGMENTS = [
-  // Startpunkt der ersten Stufe liegt in der Flächenmitte; zunächst nur drei Pixel.
+  // Drei Pixel in der Mitte bilden den Startpunkt; von dort verzweigt das Netz.
   { stage: 0, points: [[7, 7], [8, 8], [9, 7]] },
-  // Eine einzige Hauptfissur wächst schrittweise nach oben rechts weiter.
-  { stage: 1, points: [[9, 7], [10, 6], [10, 5]] },
-  { stage: 2, points: [[10, 5], [9, 4], [10, 3]] },
-  // Erst ab Stufe drei kommt eine kurze, mit der Mitte verbundene Verzweigung hinzu.
-  { stage: 3, points: [[8, 8], [7, 9], [6, 9]] },
-  { stage: 4, points: [[6, 9], [5, 10], [4, 10]] },
-  { stage: 5, points: [[10, 5], [11, 5], [12, 4]] },
-  { stage: 6, points: [[12, 4], [12, 3], [13, 2]] },
-  { stage: 7, points: [[9, 7], [9, 8], [10, 9]] },
-  { stage: 8, points: [[10, 9], [11, 10], [12, 10]] },
-  { stage: 9, points: [[7, 9], [7, 10], [8, 11], [9, 12]] },
+  // Die ersten Stufen wachsen in zwei diagonale Richtungen.
+  { stage: 1, points: [[9, 7], [10, 6], [11, 6]] },
+  { stage: 2, points: [[7, 7], [6, 6], [5, 6]] },
+  { stage: 3, points: [[11, 6], [12, 5], [13, 5]] },
+  { stage: 4, points: [[5, 6], [4, 5], [3, 5]] },
+  // Danach kommen verbunden eine obere, eine linke untere und eine rechte untere Richtung hinzu.
+  { stage: 5, points: [[8, 8], [8, 7], [8, 6]] },
+  { stage: 6, points: [[8, 8], [7, 9], [6, 10]] },
+  { stage: 7, points: [[6, 10], [5, 10], [4, 11]] },
+  { stage: 8, points: [[8, 8], [9, 9], [10, 10]] },
+  // Die letzte Stufe verlängert den Südost-Arm und öffnet einen kurzen Süd-Arm.
+  { stage: 9, points: [[10, 10], [11, 10], [12, 11]] },
+  { stage: 9, points: [[8, 8], [8, 9], [8, 10]] },
 ];
 
 function directionOf(points, index) {
