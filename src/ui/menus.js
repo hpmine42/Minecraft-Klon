@@ -211,7 +211,7 @@ export class Menus {
     const transferButton = document.createElement('button');
     transferButton.type = 'button';
     transferButton.className = 'craft-transfer-toggle';
-    transferButton.textContent = 'Einzeltransfer einschalten';
+    transferButton.textContent = 'Einzel-Item-Modus starten';
     transferButton.setAttribute('aria-pressed', 'false');
     const transferStatus = document.createElement('div');
     transferStatus.className = 'craft-transfer-status';
@@ -229,8 +229,8 @@ export class Menus {
     });
     transferControls.appendChild(transferButton);
     transferControls.appendChild(transferStatus);
-    craftWrap.appendChild(transferControls);
     this.craftWrap = craftWrap;
+    this.transferControls = transferControls;
     this.singleTransferButton = transferButton;
     this.transferStatus = transferStatus;
 
@@ -283,6 +283,8 @@ export class Menus {
     }
     book.appendChild(bookList);
 
+    // Die Umschaltung bleibt oben im Inventar sichtbar, auch wenn der Slotbereich scrollt.
+    root.appendChild(transferControls);
     root.appendChild(craftWrap);
     root.appendChild(book);
 
@@ -578,8 +580,8 @@ export class Menus {
     this.transferSourceIndex = -1;
     if (this.singleTransferButton) {
       this.singleTransferButton.textContent = active
-        ? 'Einzeltransfer beenden'
-        : 'Einzeltransfer einschalten';
+        ? 'Einzel-Item-Modus beenden'
+        : 'Einzel-Item-Modus starten';
       this.singleTransferButton.setAttribute('aria-pressed', String(active));
       this.singleTransferButton.classList.toggle('active', active);
     }
@@ -775,11 +777,11 @@ export class Menus {
         ? this.inventory.getSlot(this.transferSourceIndex)
         : null;
       if (!this.singleTransferMode) {
-        this.transferStatus.textContent = 'Einzeltransfer: Inventar-Slot wählen, dann ein 3×3-Feld antippen. Pro Tippen wird 1 Item gelegt.';
+        this.transferStatus.textContent = 'Ein Item pro Tipp: Modus starten, Inventar-Slot wählen, dann Crafting-Feld antippen.';
       } else if (!selectedSource) {
-        this.transferStatus.textContent = 'Schritt 1: Tippe einen belegten Inventar-Slot an.';
+        this.transferStatus.textContent = 'Modus an: Tippe einen belegten Inventar-Slot an; danach ein 3×3-Feld. Pro Tipp wandert 1 Item.';
       } else {
-        this.transferStatus.textContent = `Gewählt: ${getName(selectedSource.id)} ×${selectedSource.count}. Tippe ein Crafting-Feld an; je Tippen wandert 1 Item.`;
+        this.transferStatus.textContent = `Ausgewählt: ${getName(selectedSource.id)} ×${selectedSource.count}. Tippe ein Crafting-Feld; je Tipp wandert 1 Item.`;
       }
     }
 
@@ -820,7 +822,7 @@ export class Menus {
         <li><b>⛏ Taste:</b> Block abbauen / Mob angreifen (halten)</li>
         <li><b>▣ Taste:</b> Block platzieren / Item benutzen</li>
         <li><b>Rucksack:</b> Inventar & Crafting; Items antippen oder direkt ins 3×3-Feld ziehen</li>
-        <li><b>Einzeltransfer:</b> Button drücken, Inventar-Slot wählen und Crafting-Feld antippen; pro Tipp wird ein Item gelegt</li>
+        <li><b>Einzel-Item-Modus:</b> Schalter oben im Inventar drücken, Slot wählen und Crafting-Feld antippen; pro Tipp wird 1 Item gelegt</li>
         <li><b>⛶ Taste:</b> Vollbild ein- und ausschalten</li>
         <li><b>⚙ Taste:</b> Pause / Einstellungen</li>
         <li><b>Hotbar:</b> Antippen zum Itemwechsel</li>

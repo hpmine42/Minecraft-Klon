@@ -227,6 +227,16 @@ ok(game.state === 'playing', 'Resume funktioniert');
   // Nach unten schauen und Boden anvisieren
   p.pitch = -Math.PI / 2 + 0.15;
   const targetBefore = game.world.raycast(p.eyePosition(), p.lookDir(), 5.2);   ok(targetBefore !== null, `Abbau-Ziel gefunden (Block ${targetBefore?.id})`);
+  const mobRaycast = game.mobs.raycastMob;
+  game.mobs.raycastMob = () => null;
+  game._updatePlaying(1 / 60);
+  game.mobs.raycastMob = mobRaycast;
+  const visibleTarget = game.world.raycast(p.eyePosition(), p.lookDir(), 5.2);
+  ok(game.blockOutline.mesh.visible && visibleTarget
+    && Math.abs(game.blockOutline.mesh.position.x - visibleTarget.x - 0.5) < 0.001
+    && Math.abs(game.blockOutline.mesh.position.y - visibleTarget.y - 0.5) < 0.001
+    && Math.abs(game.blockOutline.mesh.position.z - visibleTarget.z - 0.5) < 0.001,
+  'Zielkontur erscheint ohne Angriff am tatsächlich anvisierten Block');
 
   // Kreativ: sofort im Test alles abbauen
   p.gamemode = 'creative';

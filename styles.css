@@ -583,11 +583,19 @@ html, body {
   letter-spacing: 0.8px;
 }
 .craft-transfer-controls {
+  position: sticky;
+  top: 0;
+  z-index: 12;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 10px;
   margin: 0 0 9px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(18, 24, 36, 0.98);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 .craft-transfer-toggle {
   flex: 0 0 auto;
