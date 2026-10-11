@@ -276,8 +276,8 @@ const outlineScene = {
   remove(object) { this.children = this.children.filter((entry) => entry !== object); },
 };
 const outline = new BlockOutline(outlineScene);
-ok(outlineScene.children.includes(outline.mesh) && !outline.mesh.visible,
-  'Blockkontur wird anfangs verborgen in die Szene eingefügt');
+ok(outlineScene.children.includes(outline.mesh) && !outline.mesh.visible && outline.mesh.children.length === 2,
+  'Kontrastreiche Doppelkontur wird anfangs verborgen in die Szene eingefügt');
 outline.update({ x: 2, y: 5, z: -1 });
 ok(outline.mesh.visible && outline.mesh.position.x === 2.5 && outline.mesh.position.y === 5.5 && outline.mesh.position.z === -0.5,
   'Blockkontur liegt zentriert um den angeschauten Block');

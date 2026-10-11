@@ -299,6 +299,9 @@ ok(game.world.getBlock(targetBlock.x, targetBlock.y, targetBlock.z) === BLOCK.AI
 const invBtn = elById('btn-inventory');
 invBtn.dispatch('touchstart', makeEvent([{ identifier: 7, clientX: 10, clientY: 10 }]));
 ok(game.state === 'inventory', 'Inventar-Button öffnet Inventar');
+ok(game.menus.transferControls.parentElement === game.menus.els['inventory-body']
+  && game.menus.els['inventory-body'].children[0] === game.menus.transferControls,
+'Einzel-Item-Schalter sitzt sichtbar am Anfang des Inventars');
 
 // Item mit einem Finger aus dem Inventar direkt ins 3×3-Craftingfeld ziehen.
 game.inventory.slots[9] = { id: BLOCK.LOG, count: 1, dur: null };
