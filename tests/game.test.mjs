@@ -277,10 +277,15 @@ const outlineScene = {
 };
 const outline = new BlockOutline(outlineScene);
 ok(outlineScene.children.includes(outline.mesh) && !outline.mesh.visible
-  && outline.mesh.isLineSegments && outline.material.color.getHex() === 0x050505,
-  'Einzelne schwarze Blockkontur wird anfangs verborgen in die Szene eingefügt');
+  && outline.mesh.isMesh && outline.material.color.getHex() === 0x050505,
+  'Einzelne schwarze Flächenkontur wird anfangs verborgen in die Szene eingefügt');
 ok(outline.material.depthTest && !outline.material.depthWrite && outline.mesh.renderOrder === 10,
   'Blockkontur blendet verdeckte Kanten per Tiefenprüfung aus');
+ok(Math.abs(outline.geometry.boundingBox.min.x + 0.5) < 1e-6
+  && Math.abs(outline.geometry.boundingBox.max.x - 0.5) < 1e-6
+  && outline.geometry.attributes.position.count === 96
+  && outline.material.polygonOffset && outline.material.polygonOffsetFactor === -1,
+  'Alle sechs Seiten sind exakt auf der Blockfläche umrandet, ohne zu schweben');
 outline.update({ x: 2, y: 5, z: -1 });
 ok(outline.mesh.visible && outline.mesh.position.x === 2.5 && outline.mesh.position.y === 5.5 && outline.mesh.position.z === -0.5,
   'Blockkontur liegt zentriert um den angeschauten Block');
