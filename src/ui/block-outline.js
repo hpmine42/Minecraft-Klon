@@ -1,18 +1,70 @@
-// block-outline.js — schwarze, tiefengeprüfte Kontur um den Zielblock.
+// block-outline.js — flächenbündige schwarze Kantenkontur um den Zielblock.
 import * as THREE from '../../lib/three.module.js';
+
+const EDGE_WIDTH = 0.012;
+const FACE_DEFINITIONS = [
+  { normal: [1, 0, 0], u: [0, 1, 0], v: [0, 0, 1] },
+  { normal: [-1, 0, 0], u: [0, 1, 0], v: [0, 0, -1] },
+  { normal: [0, 1, 0], u: [1, 0, 0], v: [0, 0, 1] },
+  { normal: [0, -1, 0], u: [1, 0, 0], v: [0, 0, -1] },
+  { normal: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0] },
+  { normal: [0, 0, -1], u: [-1, 0, 0], v: [0, 1, 0] },
+];
+
+function makeFaceFrameGeometry() {
+  const positions = [];
+  const indices = [];
+  const half = 0.5;
+  const halfWidth = EDGE_WIDTH / 2;
+
+  const addQuad = (face, centerU, centerV, halfU, halfV) => {
+    const start = positions.length / 3;
+    for (const [uAmount, vAmount] of [
+      [centerU - halfU, centerV - halfV],
+      [centerU + halfU, centerV - halfV],
+      [centerU + halfU, centerV + halfV],
+      [centerU - halfU, centerV + halfV],
+    ]) {
+      positions.push(
+        face.normal[0] * half + face.u[0] * uAmount + face.v[0] * vAmount,
+        face.normal[1] * half + face.u[1] * uAmount + face.v[1] * vAmount,
+        face.normal[2] * half + face.u[2] * uAmount + face.v[2] * vAmount,
+      );
+    }
+    indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
+  };
+
+  for (const face of FACE_DEFINITIONS) {
+    // Vier dünne Streifen liegen exakt in der Blockfläche und umranden sie.
+    for (const sign of [-1, 1]) {
+      addQuad(face, 0, sign * (half - halfWidth), half, halfWidth);
+      addQuad(face, sign * (half - halfWidth), 0, halfWidth, half);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
 
 export class BlockOutline {
   constructor(scene) {
-    const box = new THREE.BoxGeometry(1.04, 1.04, 1.04);
-    this.geometry = new THREE.EdgesGeometry(box);
-    box.dispose();
-    this.material = new THREE.LineBasicMaterial({
+    this.geometry = makeFaceFrameGeometry();
+    this.material = new THREE.MeshBasicMaterial({
       color: 0x050505,
       depthTest: true,
       depthWrite: false,
+      depthFunc: THREE.LessEqualDepth,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+      side: THREE.DoubleSide,
       toneMapped: false,
     });
-    this.mesh = new THREE.LineSegments(this.geometry, this.material);
+    this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.visible = false;
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 10;
@@ -20,7 +72,7 @@ export class BlockOutline {
     this.scene.add(this.mesh);
   }
 
-  /** Zeigt alle nicht verdeckten Würfelkanten des getroffenen Blocks. */
+  /** Zeigt die bündigen Ränder der sichtbaren Blockflächen. */
   update(hit) {
     if (!hit || !Number.isFinite(hit.x) || !Number.isFinite(hit.y) || !Number.isFinite(hit.z)) {
       this.hide();
