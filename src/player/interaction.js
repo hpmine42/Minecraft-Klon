@@ -65,19 +65,21 @@ export class Interaction {
     // ---- Angriff / Abbauen -------------------------------------------------
     if (actions.attack) {
       this.swingTime = 0.22;
-      if (mobCloser && this.player.attackCooldown <= 0) {
-        this._attackMob(mobHit.mob);
-      } else if (!mobCloser && blockHit) {
-        this._breakBlock(dt, blockHit);
-      } else if (!blockHit && !mobCloser) {
+      if (mobCloser) {
         this.breakTarget = null;
-      }
-    } else {
-      // Fortschritt zurücksetzen, wenn losgelassen
-      if (this.breakTarget) {
+        this.breakProgress = 0;
+        if (this.player.attackCooldown <= 0) this._attackMob(mobHit.mob);
+      } else if (blockHit) {
+        this._breakBlock(dt, blockHit);
+      } else {
+        // Kein Ziel im Blick: mit gehaltenem Angriff beim nächsten Treffer neu starten.
         this.breakTarget = null;
         this.breakProgress = 0;
       }
+    } else {
+      // Fortschritt beim Loslassen immer zurücksetzen.
+      this.breakTarget = null;
+      this.breakProgress = 0;
     }
 
     // ---- Benutzen / Platzieren ---------------------------------------------
@@ -96,11 +98,9 @@ export class Interaction {
     return { blockHit, mobHit: mobCloser ? mobHit : null };
   }
 
-  /** Zielblock für HUD hervorheben. */
-  currentTarget(camera) {
-    const eye = this.player.eyePosition();
-    const dir = this.player.lookDir();
-    return this.world.raycast(eye, dir, 5.2);
+  /** Aktuellen Zielblock auf dem Blick- oder Mining-Strahl ermitteln. */
+  currentTarget(direction = this.player.lookDir()) {
+    return this.world.raycast(this.player.eyePosition(), direction, 5.2);
   }
 
   _attackMob(mob) {

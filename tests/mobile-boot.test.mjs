@@ -8,7 +8,7 @@ function makeEl(id) {
   return {
     id,
     listeners,
-    style: {},
+    style: { setProperty() {} },
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
     children: [],
     dataset: {},
@@ -265,23 +265,33 @@ const targetBlock = {
   y: Math.floor(eye.y),
   z: Math.floor(game.player.position.z) - 3,
 };
-game.world.setBlock(targetBlock.x, targetBlock.y, targetBlock.z, BLOCK.FLOWER_RED);
+game.world.setBlock(targetBlock.x, targetBlock.y, targetBlock.z, BLOCK.DIRT);
 const directRay = game.world.raycast(eye, game.player.lookDir(), 5.2);
-ok(directRay?.id === BLOCK.FLOWER_RED, 'Testblume liegt im Blickfeld');
+ok(directRay?.id === BLOCK.DIRT, 'Testblock liegt im Blickfeld');
 const raycastMob = game.mobs.raycastMob;
 game.mobs.raycastMob = () => null; // deterministisch auf den Block fokussieren
 const interactionUpdate = game.interaction.update.bind(game.interaction);
+const outlineUpdate = game.blockOutline.update.bind(game.blockOutline);
 let mineFrames = 0;
+let outlineShownWhileMining = false;
 game.interaction.update = (dt, actions, camera) => {
   if (actions.attack && actions.attackDirection) mineFrames++;
   return interactionUpdate(dt, actions, camera);
 };
+game.blockOutline.update = (hit) => {
+  outlineUpdate(hit);
+  if (mineFrames > 0 && hit?.x === targetBlock.x && hit?.y === targetBlock.y && hit?.z === targetBlock.z) {
+    outlineShownWhileMining ||= game.blockOutline.mesh.visible;
+  }
+};
 lookZone.dispatch('touchstart', makeEvent([{ identifier: 12, clientX: 195, clientY: 422 }]));
-await new Promise((r) => setTimeout(r, 420));
+await new Promise((r) => setTimeout(r, 760));
 lookZone.dispatch('touchend', makeEvent([{ identifier: 12, clientX: 195, clientY: 422 }]));
 game.mobs.raycastMob = raycastMob;
 game.interaction.update = interactionUpdate;
+game.blockOutline.update = outlineUpdate;
 ok(mineFrames > 0, 'Mobile-Long-Press wird im Spiel als gehaltener Abbau verarbeitet');
+ok(outlineShownWhileMining, 'Zielkontur bleibt beim mobilen Long-Press auf dem Block sichtbar');
 ok(game.world.getBlock(targetBlock.x, targetBlock.y, targetBlock.z) === BLOCK.AIR,
   'Gedrückthalten auf dem Block baut ihn direkt ab');
 
@@ -317,6 +327,50 @@ document._pointElement = game.menus.craftSlotEls[0].el;
 document.dispatch('pointerup', makePointerEvent(22, 150, 350));
 ok(game.menus.craftGrid[0]?.id === BLOCK.COBBLESTONE,
   'Inventar-Items lassen sich weiterhin per Antippen und erneutem Antippen ablegen');
+game.menus._returnCraftGrid();
+
+// Einzeltransfer-Modus: Slot auswählen, dann pro Crafting-Tipp genau ein Item einlegen.
+game.inventory.slots[11] = { id: BLOCK.LOG, count: 2, dur: null };
+game.menus.refreshInventory();
+const transferButton = game.menus.singleTransferButton;
+transferButton.dispatch('touchend', makeEvent([{ identifier: 30, clientX: 20, clientY: 20 }]));
+ok(game.menus.singleTransferMode, 'Einzeltransfer-Button aktiviert den Einlege-Modus');
+const transferSource = game.menus.invSlotEls.find((slot) => slot.index === 11);
+transferSource.el.dispatch('pointerdown', makePointerEvent(31, 110, 300));
+document.dispatch('pointerup', makePointerEvent(31, 110, 300));
+ok(game.menus.transferSourceIndex === 11 && game.menus.heldStack === null,
+  'Inventar-Slot wird ausgewählt, ohne den ganzen Stapel aufzunehmen');
+const transferTarget = game.menus.craftSlotEls[4];
+transferTarget.el.dispatch('pointerdown', makePointerEvent(32, 150, 350));
+document.dispatch('pointerup', makePointerEvent(32, 150, 350));
+ok(game.inventory.slots[11]?.count === 1 && game.menus.craftGrid[4]?.count === 1 && game.menus.heldStack === null,
+  'Erster Tipp legt genau ein Item ein und lässt den restlichen Stapel im Inventar');
+ok(game.menus.resultSlotEl.stack?.id === BLOCK.PLANKS,
+  'Einzeltransfer aktualisiert sofort das Crafting-Ergebnis');
+transferTarget.el.dispatch('pointerdown', makePointerEvent(33, 150, 350));
+document.dispatch('pointerup', makePointerEvent(33, 150, 350));
+ok(game.inventory.slots[11] === null && game.menus.craftGrid[4]?.count === 2,
+  'Weiteres Tippen legt jeweils nur ein zusätzliches Item ein');
+transferButton.dispatch('touchend', makeEvent([{ identifier: 34, clientX: 20, clientY: 20 }]));
+ok(!game.menus.singleTransferMode, 'Einzeltransfer lässt sich wieder ausschalten');
+game.menus._returnCraftGrid();
+
+// Mehrteilige Rezepte lassen sich durch getrennte Tipps auf die passenden Felder einsetzen.
+game.inventory.slots[12] = { id: BLOCK.PLANKS, count: 2, dur: null };
+game.menus.refreshInventory();
+transferButton.dispatch('touchend', makeEvent([{ identifier: 35, clientX: 20, clientY: 20 }]));
+const plankTransferSource = game.menus.invSlotEls.find((slot) => slot.index === 12);
+plankTransferSource.el.dispatch('pointerdown', makePointerEvent(36, 110, 300));
+document.dispatch('pointerup', makePointerEvent(36, 110, 300));
+game.menus.craftSlotEls[0].el.dispatch('pointerdown', makePointerEvent(37, 150, 350));
+document.dispatch('pointerup', makePointerEvent(37, 150, 350));
+game.menus.craftSlotEls[3].el.dispatch('pointerdown', makePointerEvent(38, 150, 350));
+document.dispatch('pointerup', makePointerEvent(38, 150, 350));
+ok(game.inventory.slots[12] === null && game.menus.craftGrid[0]?.id === BLOCK.PLANKS && game.menus.craftGrid[3]?.id === BLOCK.PLANKS,
+  'Zwei einzelne Zutaten landen auf zwei Crafting-Feldern');
+ok(game.menus.resultSlotEl.stack?.id === BLOCK.STICK,
+  'Einzeltransfer erlaubt auch mehrteilige Rezepte wie Stöcke');
+transferButton.dispatch('touchend', makeEvent([{ identifier: 39, clientX: 20, clientY: 20 }]));
 game.menus._returnCraftGrid();
 
 document._pointElement = null;

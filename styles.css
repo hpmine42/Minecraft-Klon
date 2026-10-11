@@ -582,6 +582,39 @@ html, body {
   text-transform: uppercase;
   letter-spacing: 0.8px;
 }
+.craft-transfer-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 0 0 9px;
+}
+.craft-transfer-toggle {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #eef;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.craft-transfer-toggle.active {
+  border-color: #8fe070;
+  background: rgba(76, 154, 53, 0.55);
+  box-shadow: 0 0 0 2px rgba(126, 217, 87, 0.2);
+}
+.craft-transfer-status {
+  flex: 1 1 180px;
+  min-width: 0;
+  color: #c8d8e8;
+  font-size: 11px;
+  line-height: 1.35;
+}
 .craft-wrap {
   margin-bottom: 6px;
 }
@@ -623,6 +656,12 @@ html, body {
   outline: 2px solid #9af276;
   outline-offset: 1px;
   background: rgba(126, 217, 87, 0.3);
+}
+.inv-slot.transfer-source-selected {
+  border-color: #ffd66e;
+  outline: 2px solid rgba(255, 214, 110, 0.8);
+  outline-offset: 1px;
+  background: rgba(255, 214, 110, 0.18);
 }
 .inv-grid {
   display: grid;
