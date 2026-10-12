@@ -46,7 +46,7 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 - 🐷 **Tiere**: Schwein, Kuh, Schaf, Huhn – wandern, fliehen, liefern Fleisch/Leder/Wolle
 - 🧟 **Nachts Zombies** – sie jagen, greifen an und verbrennen im Sonnenlicht
 - 🍖 **Hunger & Gesundheit**: Essen, Verhungern, Regeneration, Fallschaden, Ertrinken
-- 🎒 **Inventar** (36 Slots + Hotbar) mit Stapeln, Haltbarkeit und Touch-Bedienung
+- 🎒 **Inventar** (36 Slots + Hotbar) mit Minecraft-Maussteuerung: links Stapel nehmen/legen, rechts Hälfte bzw. einzelnes Item, Ziehen verteilt Stapel; plus Touch-Bedienung
 - 🔥 **Funktionierender Ofen** mit Ein-/Brennstoff-/Ausgabe-Slots, Schmelzbalken, gespeicherten Fortschritten und Rezepten für Erze, Sand, Lehm, Holz und Fleisch
 - 📦 **Truhen** mit 27 weltgebundenen Slots; Inhalte bleiben nach Speichern und Laden erhalten
 - 🪵 **Holzkohle** aus Holz – als lang brennender Brennstoff und für Fackeln verwendbar

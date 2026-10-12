@@ -17,6 +17,8 @@ export class Menus {
     this.containerSlotSignature = null;
     this.containerNotice = null;
     this._slotGesture = null;
+    this._mouseGesture = null;
+    this._desktopMouseBound = false;
     this.selectedSlot = -1;
     this.singleTransferMode = false;
     this.transferSourceIndex = -1;
@@ -257,6 +259,7 @@ export class Menus {
     const root = this.els['inventory-body'];
     if (!root) return;
     root.innerHTML = '';
+    root.addEventListener('contextmenu', (e) => e.preventDefault());
 
     // Crafting 3x3
     const craftWrap = document.createElement('div');
@@ -480,6 +483,7 @@ export class Menus {
 
     root.appendChild(invWrap);
     this._bindInventoryTouchDrag();
+    this._bindDesktopInventoryMouse();
 
     // Inventar schließen (X)
     const close = this.els['btn-close-inventory'];
@@ -528,12 +532,8 @@ export class Menus {
     } else {
       el.addEventListener('touchstart', (e) => this._startInventoryTouch(e, kind, index), { passive: false });
     }
-    el.addEventListener('mousedown', (e) => {
-      if (wasRecentTouch()) return;
-      e.preventDefault();
-      e.stopPropagation();
-      this._slotClick(kind, index);
-    });
+    el.addEventListener('mousedown', (e) => this._startDesktopInventoryMouse(e, kind, index));
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
     return slot;
   }
 
@@ -549,6 +549,168 @@ export class Menus {
       document.addEventListener('touchmove', (e) => this._moveInventoryTouch(e), { passive: false });
       document.addEventListener('touchend', (e) => this._endInventoryTouch(e), { passive: false });
       document.addEventListener('touchcancel', (e) => this._cancelInventoryTouch(e), { passive: false });
+    }
+  }
+
+  _bindDesktopInventoryMouse() {
+    if (typeof document === 'undefined' || !document.addEventListener || this._desktopMouseBound) return;
+    this._desktopMouseBound = true;
+    document.addEventListener('mousemove', (e) => this._moveDesktopInventoryMouse(e));
+    document.addEventListener('mouseup', (e) => this._endDesktopInventoryMouse(e));
+  }
+
+  _sameSlot(a, b) {
+    return !!a && !!b && a.kind === b.kind && a.index === b.index;
+  }
+
+  _startDesktopInventoryMouse(e, kind, index) {
+    if (wasRecentTouch() || (e.button !== 0 && e.button !== 2)) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (this.singleTransferMode) {
+      if (e.button === 0) this._slotClick(kind, index, 0);
+      return;
+    }
+
+    const pickedUpAtStart = !this.heldStack;
+    if (pickedUpAtStart) {
+      this._slotClick(kind, index, e.button);
+      if (!this.heldStack) return;
+    }
+    const gesture = {
+      button: e.button,
+      startTarget: { kind, index },
+      pickedUpAtStart,
+      targets: [],
+      hoverTarget: null,
+    };
+    this._mouseGesture = gesture;
+    if (!pickedUpAtStart) this._recordMouseDropTarget(gesture, { kind, index });
+    if (this.heldStack) this._positionFloatingStack(e);
+  }
+
+  _moveDesktopInventoryMouse(e) {
+    if (this.heldStack) this._positionFloatingStack(e);
+    const gesture = this._mouseGesture;
+    if (!gesture) return;
+
+    const target = this._slotAtPoint(e.clientX, e.clientY);
+
+    if (gesture.hoverTarget?.el && gesture.hoverTarget.el !== target?.el) {
+      gesture.hoverTarget.el.classList.remove('drag-over');
+    }
+    if (target?.el) target.el.classList.add('drag-over');
+    gesture.hoverTarget = target;
+
+    if (target && !(gesture.pickedUpAtStart && this._sameSlot(target, gesture.startTarget))) {
+      this._recordMouseDropTarget(gesture, target);
+    }
+  }
+
+  _endDesktopInventoryMouse(e) {
+    const gesture = this._mouseGesture;
+    if (!gesture || (e.button != null && e.button !== gesture.button)) return;
+    const endTarget = this._slotAtPoint(e.clientX, e.clientY);
+    const endedOnSameSlot = this._sameSlot(endTarget, gesture.startTarget);
+    const endedOnDifferentSlot = !!endTarget && !endedOnSameSlot;
+
+    if (gesture.pickedUpAtStart) {
+      // Beim Aufnehmen per Drag bleibt der Cursor-Stapel hängen, falls man
+      // nur geklickt hat. Wird auf einem anderen Slot losgelassen, wird gelegt.
+      if (endedOnDifferentSlot) {
+        this._recordMouseDropTarget(gesture, endTarget);
+        this._distributeMouseStack(gesture.button, gesture.targets);
+      }
+    } else if (endedOnSameSlot) {
+      // Kein echter Drag: normale Minecraft-Linksklick-/Rechtsklick-Regeln,
+      // einschließlich Tauschen verschiedener Stapel.
+      this._slotClick(gesture.startTarget.kind, gesture.startTarget.index, gesture.button);
+    } else if (endedOnDifferentSlot) {
+      this._recordMouseDropTarget(gesture, endTarget);
+      this._distributeMouseStack(gesture.button, gesture.targets);
+    }
+
+    if (gesture.hoverTarget?.el) gesture.hoverTarget.el.classList.remove('drag-over');
+    this._mouseGesture = null;
+  }
+
+  _canPlaceInSlot(kind, index, stack) {
+    if (!stack || kind === 'result') return false;
+    if (kind === 'inv' || kind === 'craft') return true;
+    if (kind === 'container') return this._canPlaceInContainer(index, stack);
+    return false;
+  }
+
+  _mouseTargetCapacity(target) {
+    if (!target || !this.heldStack || !this._canPlaceInSlot(target.kind, target.index, this.heldStack)) return 0;
+    const current = this._getSlotStack(target.kind, target.index);
+    const max = BLOCKS[this.heldStack.id]?.maxStack || 64;
+    if (!current) return max;
+    if (current.id === this.heldStack.id && current.dur == null && this.heldStack.dur == null) {
+      return Math.max(0, max - current.count);
+    }
+    return 0;
+  }
+
+  _recordMouseDropTarget(gesture, target) {
+    if (!target || this._mouseTargetCapacity(target) < 1) return;
+    if (gesture.targets.some((candidate) => this._sameSlot(candidate, target))) return;
+    gesture.targets.push(target);
+  }
+
+  _setSlotStack(kind, index, stack) {
+    if (kind === 'inv') this.inventory.setSlot(index, stack);
+    else if (kind === 'craft') this.craftGrid[index] = stack;
+    else if (kind === 'container' && this.containerSession) this.containerSession.slots[index] = stack;
+  }
+
+  _putHeldCountInSlot(target, count) {
+    if (!this.heldStack || count < 1 || this._mouseTargetCapacity(target) < count) return 0;
+    const current = this._getSlotStack(target.kind, target.index);
+    if (current) current.count += count;
+    else this._setSlotStack(target.kind, target.index, {
+      id: this.heldStack.id,
+      count,
+      dur: this.heldStack.dur ?? null,
+    });
+    return count;
+  }
+
+  _distributeMouseStack(button, targets) {
+    if (!this.heldStack || !targets?.length) return;
+    let changed = false;
+    if (button === 2) {
+      // Minecraft-Rechtsziehen: genau ein Item pro belegbarem Slot.
+      for (const target of targets) {
+        if (!this.heldStack) break;
+        const placed = this._putHeldCountInSlot(target, 1);
+        if (!placed) continue;
+        this.heldStack.count -= placed;
+        changed = true;
+      }
+    } else {
+      // Minecraft-Linksziehen: Stapel möglichst gleichmäßig verteilen.
+      let remaining = this.heldStack.count;
+      let openTargets = targets.filter((target) => this._mouseTargetCapacity(target) > 0).length;
+      for (const target of targets) {
+        if (remaining <= 0 || openTargets <= 0) break;
+        const capacity = this._mouseTargetCapacity(target);
+        if (capacity <= 0) continue;
+        const share = Math.ceil(remaining / openTargets);
+        const placed = this._putHeldCountInSlot(target, Math.min(share, capacity, remaining));
+        remaining -= placed;
+        openTargets -= 1;
+        changed ||= placed > 0;
+      }
+      this.heldStack.count = remaining;
+    }
+
+    if (this.heldStack?.count <= 0) this.heldStack = null;
+    if (!changed) return;
+    this.refreshInventory();
+    if (this.containerSession && this.cb.onContainerChange) {
+      this.cb.onContainerChange(this.containerSession.state, this.containerSession.type, -1);
     }
   }
 
@@ -808,107 +970,132 @@ export class Menus {
     if (this.furnaceStatus) this.furnaceStatus.textContent = text;
   }
 
-  _containerSlotClick(index) {
+  _furnaceOutputClick(button = 0) {
     const session = this.containerSession;
-    if (!session || !Number.isInteger(index) || index < 0 || index >= session.slots.length) return;
-    const current = session.slots[index];
+    const output = session?.type === 'furnace' ? session.slots[2] : null;
+    if (!output) return;
 
-    if (this.heldStack) {
-      if (!this._canPlaceInContainer(index, this.heldStack)) {
-        if (session.type === 'furnace') {
-          this._showContainerNotice(index === 2
-            ? 'Der Ergebnis-Slot kann nicht befüllt werden.'
-            : index === 1
-              ? 'Dieses Item ist kein Brennstoff.'
-              : 'Dieses Item kann nicht geschmolzen werden.');
-        }
-        return;
-      }
-      if (!current) {
-        session.slots[index] = this.heldStack;
-        this.heldStack = null;
-      } else if (current.id === this.heldStack.id
-          && current.dur == null && this.heldStack.dur == null) {
-        const max = BLOCKS[current.id]?.maxStack || 64;
-        const moved = Math.min(Math.max(0, max - current.count), this.heldStack.count);
-        if (!moved) return;
-        current.count += moved;
-        this.heldStack.count -= moved;
-        if (this.heldStack.count <= 0) this.heldStack = null;
-      } else if (this._canPlaceInContainer(index, current)) {
-        session.slots[index] = this.heldStack;
-        this.heldStack = current;
-      } else {
-        return;
-      }
-    } else if (current) {
-      this.heldStack = current;
-      session.slots[index] = null;
+    if (!this.heldStack) {
+      const count = button === 2 ? Math.ceil(output.count / 2) : output.count;
+      this.heldStack = { ...output, count };
+      output.count -= count;
+      if (output.count <= 0) session.slots[2] = null;
+    } else if (this.heldStack.id === output.id
+        && this.heldStack.dur == null && output.dur == null) {
+      const max = BLOCKS[output.id]?.maxStack || 64;
+      const count = button === 2
+        ? Math.min(1, output.count, max - this.heldStack.count)
+        : Math.min(output.count, max - this.heldStack.count);
+      if (count <= 0) return;
+      this.heldStack.count += count;
+      output.count -= count;
+      if (output.count <= 0) session.slots[2] = null;
     } else {
       return;
     }
+
+    this.cb.onContainerChange && this.cb.onContainerChange(session.state, session.type, 2);
+    this.refreshInventory();
+  }
+
+  _containerSlotClick(index, button = 0) {
+    const session = this.containerSession;
+    if (!session || !Number.isInteger(index) || index < 0 || index >= session.slots.length) return;
+    if (session.type === 'furnace' && index === 2) {
+      this._furnaceOutputClick(button);
+      return;
+    }
+
+    if (this.heldStack && !this._canPlaceInContainer(index, this.heldStack)) {
+      if (session.type === 'furnace') {
+        this._showContainerNotice(index === 1
+          ? 'Dieses Item ist kein Brennstoff.'
+          : 'Dieses Item kann nicht geschmolzen werden.');
+      }
+      return;
+    }
+    if (!this._handleStackSlotClick('container', index, button)) return;
 
     this.containerNotice = null;
     this.cb.onContainerChange && this.cb.onContainerChange(session.state, session.type, index);
     this.refreshInventory();
   }
 
-  _slotClick(kind, index) {
+  _handleStackSlotClick(kind, index, button = 0) {
+    const current = this._getSlotStack(kind, index);
+    const rightClick = button === 2;
+
+    if (!this.heldStack) {
+      if (!current) return false;
+      if (rightClick) {
+        const count = Math.ceil(current.count / 2);
+        this.heldStack = { ...current, count };
+        current.count -= count;
+        if (current.count <= 0) this._setSlotStack(kind, index, null);
+      } else {
+        this.heldStack = current;
+        this._setSlotStack(kind, index, null);
+      }
+      return true;
+    }
+
+    if (!this._canPlaceInSlot(kind, index, this.heldStack)) return false;
+    if (!current) {
+      if (rightClick) {
+        this._setSlotStack(kind, index, {
+          id: this.heldStack.id,
+          count: 1,
+          dur: this.heldStack.dur ?? null,
+        });
+        this.heldStack.count -= 1;
+        if (this.heldStack.count <= 0) this.heldStack = null;
+      } else {
+        this._setSlotStack(kind, index, this.heldStack);
+        this.heldStack = null;
+      }
+      return true;
+    }
+
+    if (current.id === this.heldStack.id && current.dur == null && this.heldStack.dur == null) {
+      const max = BLOCKS[current.id]?.maxStack || 64;
+      const available = Math.max(0, max - current.count);
+      const moved = rightClick
+        ? Math.min(1, available, this.heldStack.count)
+        : Math.min(available, this.heldStack.count);
+      if (!moved) return false;
+      current.count += moved;
+      this.heldStack.count -= moved;
+      if (this.heldStack.count <= 0) this.heldStack = null;
+      return true;
+    }
+
+    if (!rightClick && this._canPlaceInSlot(kind, index, current)) {
+      this._setSlotStack(kind, index, this.heldStack);
+      this.heldStack = current;
+      return true;
+    }
+    return false;
+  }
+
+  _slotClick(kind, index, button = 0) {
     if (kind === 'result') {
-      this._takeCraftResult();
+      if (button === 0) this._takeCraftResult();
       return;
     }
     if (kind === 'container') {
-      this._containerSlotClick(index);
+      this._containerSlotClick(index, button);
       return;
     }
     if (this.singleTransferMode) {
-      if (kind === 'inv') this._selectTransferSource(index);
-      else if (kind === 'craft') this._transferOneToCraft(index);
+      if (button === 0) {
+        if (kind === 'inv') this._selectTransferSource(index);
+        else if (kind === 'craft') this._transferOneToCraft(index);
+      }
       return;
     }
-    if (kind === 'craft') {
-      const stack = this.craftGrid[index];
-      if (this.heldStack) {
-        if (!stack) {
-          this.craftGrid[index] = this.heldStack;
-          this.heldStack = null;
-        } else if (stack.id === this.heldStack.id && stack.dur == null && stack.count < 64) {
-          stack.count += this.heldStack.count;
-          this.heldStack = null;
-        } else {
-          this.craftGrid[index] = this.heldStack;
-          this.heldStack = stack;
-        }
-      } else if (stack) {
-        this.heldStack = stack;
-        this.craftGrid[index] = null;
-      }
-      this.refreshInventory();
-      return;
-    }
-    // Inventar-Slot
-    const stack = this.inventory.slots[index];
-    if (this.heldStack) {
-      if (!stack) {
-        this.inventory.setSlot(index, this.heldStack);
-        this.heldStack = null;
-      } else if (stack.id === this.heldStack.id && stack.dur == null && (BLOCKS[stack.id]?.maxStack || 64) > stack.count) {
-        const max = BLOCKS[stack.id]?.maxStack || 64;
-        const move = Math.min(max - stack.count, this.heldStack.count);
-        stack.count += move;
-        this.heldStack.count -= move;
-        if (this.heldStack.count <= 0) this.heldStack = null;
-      } else {
-        this.inventory.setSlot(index, this.heldStack);
-        this.heldStack = stack;
-      }
-    } else if (stack) {
-      this.heldStack = stack;
-      this.inventory.setSlot(index, null);
-    }
+    if (!this._handleStackSlotClick(kind, index, button)) return;
     this.refreshInventory();
-    if (this.containerSession && this.cb.onContainerChange) {
+    if (this.containerSession && kind === 'inv' && this.cb.onContainerChange) {
       this.cb.onContainerChange(this.containerSession.state, this.containerSession.type, index);
     }
   }
@@ -1117,6 +1304,7 @@ export class Menus {
         <li><b>Mittlere Maustaste:</b> Block kopieren (Kreativ)</li>
         <li><b>Mausrad / 1-9:</b> Schnellleiste</li>
         <li><b>E:</b> Inventar & Crafting &nbsp;|&nbsp; <b>Esc:</b> Pause</li>
+        <li><b>Im Inventar:</b> Linksklick nimmt/legt ganze Stapel; Rechtsklick nimmt die Hälfte oder legt 1 Item. Gedrückt ziehen verteilt Items.</li>
         <li><b>F:</b> Fliegen umschalten &nbsp;|&nbsp; <b>F3:</b> Debug-Infos</li>
         <li><b>M:</b> Spielmodus wechseln &nbsp;|&nbsp; <b>P:</b> Friedlich umschalten</li>
         <li><b>T:</b> Tag/Nacht springen &nbsp;|&nbsp; <b>O:</b> Wetter umschalten</li>
