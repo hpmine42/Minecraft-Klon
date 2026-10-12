@@ -84,12 +84,28 @@ html, body {
 #stats-bars {
   position: absolute;
   left: 50%;
-  bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(126px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   width: min(92vw, 420px);
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+@media (min-width: 641px) {
+  #stats-bars {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  #hearts, #hunger { flex: 1 1 50%; }
+  #hunger { justify-content: flex-end; }
+  #air {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 3px);
+    transform: translateX(-50%);
+  }
 }
 #hearts, #hunger {
   display: flex;
@@ -902,9 +918,94 @@ html, body {
 }
 
 /* Inventar */
-.inv-panel {
-  width: min(94vw, 660px);
+#inventory-screen .inv-panel {
+  width: min(96vw, 960px);
+  max-height: min(92vh, calc(100dvh - 28px));
 }
+#inventory-body { min-width: 0; }
+.player-inventory-layout {
+  display: grid;
+  grid-template-columns: minmax(224px, 268px) minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+}
+.player-side-panel {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.16);
+}
+.equipment-stage {
+  display: grid;
+  grid-template-columns: 48px minmax(74px, 1fr) 48px;
+  align-items: center;
+  justify-items: center;
+  gap: 7px;
+  padding: 8px 2px;
+}
+.equipment-column {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.equipment-slot-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.equipment-slot-label {
+  color: #a8c0d8;
+  font-size: 9px;
+  line-height: 1.1;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.equipment-stage .inv-slot {
+  width: 46px;
+  height: 46px;
+  background: rgba(255, 214, 110, 0.08);
+  border-color: rgba(255, 214, 110, 0.35);
+}
+.character-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.character-preview {
+  display: block;
+  width: 88px;
+  height: 118px;
+  image-rendering: pixelated;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  background: linear-gradient(180deg, rgba(102, 144, 176, 0.14), rgba(13, 20, 26, 0.6));
+}
+.character-caption {
+  color: #9cb1c5;
+  font-size: 10px;
+}
+.player-side-panel .craft-wrap { margin-top: 8px; }
+.craft-grid.player-craft-grid { grid-template-columns: repeat(2, 52px); }
+.inv-wrap { min-width: 0; }
+.inventory-tooltip {
+  position: fixed;
+  z-index: 100;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: 6px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 5px;
+  background: rgba(10, 13, 18, 0.96);
+  color: #f4f0df;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .inv-header {
   display: flex;
   justify-content: space-between;
@@ -1078,6 +1179,10 @@ html, body {
   border-color: #fff;
   background: rgba(255, 255, 255, 0.2);
 }
+.inv-slot.hovered {
+  border-color: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 0 7px rgba(255, 255, 255, 0.2);
+}
 .inv-slot.craft-result {
   border-color: #7ed957;
   background: rgba(126, 217, 87, 0.14);
@@ -1246,6 +1351,14 @@ html, body {
   .inv-header .small-btn { padding: 7px 8px; min-height: 40px; font-size: 12px; }
   #inventory-screen .menu-panel { touch-action: pan-y; overscroll-behavior: contain; }
   #inventory-body, .inv-wrap, .craft-wrap, .furnace-panel, .chest-panel { width: 100%; min-width: 0; }
+  #inventory-screen .inv-panel {
+    width: 100%;
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+  .player-inventory-layout { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .player-side-panel { padding: 6px; }
+  .equipment-stage { grid-template-columns: 48px minmax(78px, 110px) 48px; justify-content: center; }
+  .craft-grid.player-craft-grid { width: min(30vw, 126px); grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .craft-area { gap: clamp(6px, 2vw, 12px); }
   .furnace-layout { gap: clamp(6px, 2vw, 12px); padding: 10px 6px; }
   .furnace-layout .inv-slot { width: clamp(40px, 13vw, 52px); height: auto; aspect-ratio: 1; }

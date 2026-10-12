@@ -1,7 +1,7 @@
 // menus.js — Hauptmenü, Pause, Einstellungen, Inventar/Crafting, Tod, Hilfe.
 import { BLOCKS, getName } from '../world/blocks.js';
 import { drawTileIcon } from '../world/textures.js';
-import { matchRecipe, listRecipes } from '../player/inventory.js';
+import { matchRecipe, listRecipes, makeStack, canEquipItem, stacksEqual, EQUIPMENT_SLOTS } from '../player/inventory.js';
 import { canPlaceFurnaceItem, getSmeltingRecipe } from '../player/furnace.js';
 import { markTouchEvent, wasRecentTouch } from '../core/touch.js';
 
@@ -11,7 +11,9 @@ export class Menus {
     this.atlas = atlasCanvas;
     this.inventory = inventory;
     this.cb = callbacks; // { onPlay, onNewWorld, onResume, onSettingsChange, onSave, onQuit, onRespawn, onCraft, onFullscreen }
-    this.craftGrid = new Array(9).fill(null);
+    this.craftGrid = new Array(4).fill(null);
+    this.craftingMode = 'player';
+    this.craftRemainder = null;
     this.heldStack = null;
     this.containerSession = null;
     this.containerSlotSignature = null;
@@ -19,6 +21,8 @@ export class Menus {
     this._slotGesture = null;
     this._mouseGesture = null;
     this._desktopMouseBound = false;
+    this._hoveredInventorySlot = null;
+    this.inventoryTooltip = null;
     this.selectedSlot = -1;
     this.singleTransferMode = false;
     this.transferSourceIndex = -1;
@@ -56,20 +60,31 @@ export class Menus {
     this.showScreen(null);
   }
 
-  /** Normales Inventar mit Crafting-Oberfläche öffnen. */
+  /** Normales Inventar mit dem klassischen 2×2-Spielercrafting öffnen. */
   openPlayerInventory() {
     this._prepareInventoryMode(null);
+    this._setCraftingMode('player');
+    this.showScreen('inventory-screen');
+  }
+
+  /** Eine Werkbank behält das größere 3×3-Crafting-Raster. */
+  openWorkbenchInventory() {
+    this._prepareInventoryMode(null);
+    this._setCraftingMode('workbench');
+    if (this.inventoryTitle) this.inventoryTitle.textContent = 'Werkbank';
     this.showScreen('inventory-screen');
   }
 
   /** Ofen- und Truhenansichten verwenden dieselben Desktop-/Touch-Slots. */
   openFurnace(state) {
     this._prepareInventoryMode({ type: 'furnace', state, slots: state.slots });
+    this._setCraftingMode('player');
     this.showScreen('inventory-screen');
   }
 
   openChest(state) {
     this._prepareInventoryMode({ type: 'chest', state, slots: state.slots });
+    this._setCraftingMode('player');
     this.showScreen('inventory-screen');
   }
 
@@ -77,6 +92,7 @@ export class Menus {
     this._setSingleTransferMode(false);
     this._dropHeld();
     this._returnCraftGrid();
+    this._returnCraftRemainder();
     this.containerSession = session;
     this.containerSlotSignature = null;
     this.containerNotice = null;
@@ -84,7 +100,7 @@ export class Menus {
     const isFurnace = session?.type === 'furnace';
     const isChest = session?.type === 'chest';
     if (this.transferControls) this.transferControls.style.display = session ? 'none' : '';
-    if (this.craftWrap) this.craftWrap.style.display = session ? 'none' : '';
+    if (this.playerSidePanel) this.playerSidePanel.style.display = session ? 'none' : '';
     if (this.recipeBook) this.recipeBook.style.display = session ? 'none' : '';
     if (this.furnacePanel) this.furnacePanel.style.display = isFurnace ? '' : 'none';
     if (this.chestPanel) this.chestPanel.style.display = isChest ? '' : 'none';
@@ -97,10 +113,74 @@ export class Menus {
   closeActiveInventory() {
     this._setSingleTransferMode(false);
     this._returnCraftGrid();
+    this._returnCraftRemainder();
     this._dropHeld();
     this.containerSession = null;
     this.containerSlotSignature = null;
     this._prepareInventoryMode(null);
+    this._setCraftingMode('player');
+    if (this.inventoryTooltip) this.inventoryTooltip.style.display = 'none';
+  }
+
+  _setCraftingMode(mode) {
+    this.craftingMode = mode === 'workbench' ? 'workbench' : 'player';
+    const size = this.craftingMode === 'workbench' ? 9 : 4;
+    if (this.craftGrid.length !== size) this.craftGrid = new Array(size).fill(null);
+    if (this.craftGridEl) {
+      this.craftGridEl.classList.toggle('player-craft-grid', size === 4);
+    }
+    for (let i = 0; i < (this.craftSlotEls?.length || 0); i++) {
+      this.craftSlotEls[i].el.style.display = i < size ? '' : 'none';
+    }
+    if (this.craftLabel) {
+      this.craftLabel.textContent = size === 4 ? 'Spielercrafting (2×2)' : 'Werkbank-Crafting (3×3)';
+    }
+    if (this.transferStatus) {
+      this.transferStatus.textContent = `Ohne Ziehen einzelne Zutaten aus dem Inventar ins ${size === 4 ? '2×2' : '3×3'}-Feld legen.`;
+    }
+    this.refreshInventory();
+  }
+
+  /** Temporäre Cursor- und Craftingstapel werden zusammen mit dem Spielstand gesichert. */
+  serializeInventoryState() {
+    const serialize = (stack) => (stack ? { ...stack } : null);
+    return {
+      craftingMode: this.craftingMode,
+      craftGrid: this.craftGrid.map(serialize),
+      craftRemainder: serialize(this.craftRemainder),
+      heldStack: serialize(this.heldStack),
+    };
+  }
+
+  restoreInventoryState(data) {
+    if (!data || typeof data !== 'object') {
+      this.resetInventoryState();
+      return;
+    }
+    this.craftingMode = data.craftingMode === 'workbench' ? 'workbench' : 'player';
+    const size = this.craftingMode === 'workbench' ? 9 : 4;
+    this.craftGrid = new Array(size).fill(null);
+    if (Array.isArray(data.craftGrid)) {
+      for (let i = 0; i < Math.min(size, data.craftGrid.length); i++) {
+        const stack = data.craftGrid[i];
+        if (stack) this.craftGrid[i] = makeStack(stack.id, stack.count, stack.dur, stack.meta);
+      }
+    }
+    const remainder = data.craftRemainder;
+    this.craftRemainder = remainder ? makeStack(remainder.id, remainder.count, remainder.dur, remainder.meta) : null;
+    const held = data.heldStack;
+    this.heldStack = held ? makeStack(held.id, held.count, held.dur, held.meta) : null;
+    this._setCraftingMode(this.craftingMode);
+    this.refreshInventory();
+  }
+
+  resetInventoryState() {
+    this.craftGrid = new Array(4).fill(null);
+    this.craftingMode = 'player';
+    this.craftRemainder = null;
+    this.heldStack = null;
+    this.containerSession = null;
+    this._setCraftingMode('player');
   }
 
   // -------------------------------------------------------------------------
@@ -261,13 +341,14 @@ export class Menus {
     root.innerHTML = '';
     root.addEventListener('contextmenu', (e) => e.preventDefault());
 
-    // Crafting 3x3
+    // Spielercrafting: vier Slots. Die fünf übrigen werden nur an der Werkbank eingeblendet.
     const craftWrap = document.createElement('div');
     craftWrap.className = 'craft-wrap';
     const craftLabel = document.createElement('div');
     craftLabel.className = 'craft-label';
-    craftLabel.textContent = 'Werkbank / Crafting (3×3)';
+    craftLabel.textContent = 'Spielercrafting (2×2)';
     craftWrap.appendChild(craftLabel);
+    this.craftLabel = craftLabel;
 
     const transferControls = document.createElement('div');
     transferControls.className = 'craft-transfer-controls';
@@ -279,7 +360,7 @@ export class Menus {
     const transferStatus = document.createElement('div');
     transferStatus.className = 'craft-transfer-status';
     transferStatus.setAttribute('aria-live', 'polite');
-    transferStatus.textContent = 'Ohne Ziehen einzelne Zutaten aus dem Inventar ins 3×3-Feld legen.';
+    transferStatus.textContent = 'Ohne Ziehen einzelne Zutaten aus dem Inventar ins 2×2-Feld legen.';
     transferButton.addEventListener('click', (e) => {
       e.preventDefault();
       if (wasRecentTouch()) return;
@@ -300,10 +381,12 @@ export class Menus {
     const craftArea = document.createElement('div');
     craftArea.className = 'craft-area';
     const grid = document.createElement('div');
-    grid.className = 'craft-grid';
+    grid.className = 'craft-grid player-craft-grid';
+    this.craftGridEl = grid;
     this.craftSlotEls = [];
     for (let i = 0; i < 9; i++) {
       const slot = this._makeSlot('craft', i);
+      if (i >= 4) slot.el.style.display = 'none';
       grid.appendChild(slot.el);
       this.craftSlotEls.push(slot);
     }
@@ -436,12 +519,67 @@ export class Menus {
     this.chestPanel = chestPanel;
     this.inventoryTitle = this.els['inventory-title'] || this._el('inventory-title');
 
-    // Die Umschaltung bleibt oben im Inventar sichtbar, auch wenn der Slotbereich scrollt.
-    root.appendChild(transferControls);
-    root.appendChild(furnacePanel);
-    root.appendChild(chestPanel);
-    root.appendChild(craftWrap);
-    root.appendChild(book);
+    // Ausrüstungsfeld und einfache Pixel-Charaktervorschau. Rüstungsslots
+    // akzeptieren ausschließlich Items mit einer passenden echten Itemdefinition.
+    const playerSidePanel = document.createElement('section');
+    playerSidePanel.className = 'player-side-panel';
+    const characterHeading = document.createElement('div');
+    characterHeading.className = 'craft-label';
+    characterHeading.textContent = 'Charakter & Ausrüstung';
+    playerSidePanel.appendChild(characterHeading);
+
+    const equipmentStage = document.createElement('div');
+    equipmentStage.className = 'equipment-stage';
+    const armorColumn = document.createElement('div');
+    armorColumn.className = 'equipment-column';
+    this.equipmentSlotEls = {};
+    const equipmentLabels = { head: 'Kopf', chest: 'Brust', legs: 'Beine', feet: 'Füße', offhand: 'Nebenhand' };
+    for (const slotName of EQUIPMENT_SLOTS.slice(0, 4)) {
+      const group = document.createElement('div');
+      group.className = 'equipment-slot-group';
+      const label = document.createElement('span');
+      label.className = 'equipment-slot-label';
+      label.textContent = equipmentLabels[slotName];
+      const slot = this._makeSlot('equipment', EQUIPMENT_SLOTS.indexOf(slotName));
+      slot.el.setAttribute('aria-label', `${equipmentLabels[slotName]}-Ausrüstung`);
+      group.appendChild(label);
+      group.appendChild(slot.el);
+      this.equipmentSlotEls[slotName] = slot;
+      armorColumn.appendChild(group);
+    }
+    const characterFigure = document.createElement('div');
+    characterFigure.className = 'character-figure';
+    const characterCanvas = document.createElement('canvas');
+    characterCanvas.width = 96;
+    characterCanvas.height = 128;
+    characterCanvas.className = 'character-preview';
+    characterCanvas.setAttribute('role', 'img');
+    characterCanvas.setAttribute('aria-label', 'Pixel-Charaktervorschau');
+    this.characterCanvas = characterCanvas;
+    this._drawCharacterPreview();
+    const characterCaption = document.createElement('span');
+    characterCaption.className = 'character-caption';
+    characterCaption.textContent = 'Spieler';
+    characterFigure.appendChild(characterCanvas);
+    characterFigure.appendChild(characterCaption);
+
+    const offhandGroup = document.createElement('div');
+    offhandGroup.className = 'equipment-slot-group offhand-slot-group';
+    const offhandLabel = document.createElement('span');
+    offhandLabel.className = 'equipment-slot-label';
+    offhandLabel.textContent = equipmentLabels.offhand;
+    const offhandSlot = this._makeSlot('equipment', EQUIPMENT_SLOTS.indexOf('offhand'));
+    offhandSlot.el.setAttribute('aria-label', 'Nebenhand');
+    this.equipmentSlotEls.offhand = offhandSlot;
+    offhandGroup.appendChild(offhandLabel);
+    offhandGroup.appendChild(offhandSlot.el);
+
+    equipmentStage.appendChild(armorColumn);
+    equipmentStage.appendChild(characterFigure);
+    equipmentStage.appendChild(offhandGroup);
+    playerSidePanel.appendChild(equipmentStage);
+    playerSidePanel.appendChild(craftWrap);
+    this.playerSidePanel = playerSidePanel;
 
     // Inventarraster
     const invWrap = document.createElement('div');
@@ -481,7 +619,26 @@ export class Menus {
     invWrap.appendChild(floating);
     this.floatingEl = floating;
 
-    root.appendChild(invWrap);
+    const inventoryLayout = document.createElement('div');
+    inventoryLayout.className = 'player-inventory-layout';
+    inventoryLayout.appendChild(playerSidePanel);
+    inventoryLayout.appendChild(invWrap);
+    this.inventoryLayout = inventoryLayout;
+
+    // Die Crafting-Umschaltung bleibt oben sichtbar, auch wenn der Slotbereich scrollt.
+    root.appendChild(transferControls);
+    root.appendChild(furnacePanel);
+    root.appendChild(chestPanel);
+    root.appendChild(inventoryLayout);
+    root.appendChild(book);
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'inventory-tooltip';
+    tooltip.style.display = 'none';
+    if (document.body?.appendChild) document.body.appendChild(tooltip);
+    else root.appendChild(tooltip);
+    this.inventoryTooltip = tooltip;
+
     this._bindInventoryTouchDrag();
     this._bindDesktopInventoryMouse();
 
@@ -505,6 +662,44 @@ export class Menus {
         closeFn();
       });
     }
+  }
+
+  _drawCharacterPreview() {
+    const context = this.characterCanvas?.getContext?.('2d');
+    if (!context) return;
+    context.imageSmoothingEnabled = false;
+    context.clearRect(0, 0, 96, 128);
+    context.fillStyle = 'rgba(5, 8, 12, 0.3)';
+    context.fillRect(5, 4, 86, 120);
+    // Ein neutrales Pixelmodell dient als Vorschau; das Projekt definiert derzeit
+    // keine Rüstungs- oder Spieler-Skin-Items.
+    context.fillStyle = '#263238';
+    context.fillRect(33, 86, 13, 31);
+    context.fillRect(50, 86, 13, 31);
+    context.fillStyle = '#293b56';
+    context.fillRect(30, 112, 18, 8);
+    context.fillRect(48, 112, 18, 8);
+    context.fillStyle = '#315a9a';
+    context.fillRect(27, 38, 42, 49);
+    context.fillRect(18, 41, 10, 35);
+    context.fillRect(68, 41, 10, 35);
+    context.fillStyle = '#2b4d83';
+    context.fillRect(18, 72, 10, 9);
+    context.fillRect(68, 72, 10, 9);
+    context.fillStyle = '#d8aa82';
+    context.fillRect(39, 30, 18, 11);
+    context.fillRect(34, 8, 28, 25);
+    context.fillStyle = '#503a2d';
+    context.fillRect(34, 7, 28, 8);
+    context.fillRect(34, 13, 5, 10);
+    context.fillStyle = '#263238';
+    context.fillRect(40, 19, 4, 4);
+    context.fillRect(53, 19, 4, 4);
+    context.fillStyle = '#f0d2b7';
+    context.fillRect(44, 28, 10, 2);
+    context.fillStyle = '#7b5338';
+    context.fillRect(27, 38, 42, 4);
+    context.fillRect(31, 83, 34, 4);
   }
 
   _makeSlot(kind, index) {
@@ -568,6 +763,11 @@ export class Menus {
     e.preventDefault();
     e.stopPropagation();
 
+    if (e.shiftKey) {
+      if (!this.singleTransferMode && e.button === 0) this._shiftClick(kind, index);
+      return;
+    }
+
     if (this.singleTransferMode) {
       if (e.button === 0) this._slotClick(kind, index, 0);
       return;
@@ -592,11 +792,11 @@ export class Menus {
 
   _moveDesktopInventoryMouse(e) {
     if (this.heldStack) this._positionFloatingStack(e);
+    const target = this._slotAtPoint(e.clientX, e.clientY);
+    this._updateInventoryHover(target, e);
+
     const gesture = this._mouseGesture;
     if (!gesture) return;
-
-    const target = this._slotAtPoint(e.clientX, e.clientY);
-
     if (gesture.hoverTarget?.el && gesture.hoverTarget.el !== target?.el) {
       gesture.hoverTarget.el.classList.remove('drag-over');
     }
@@ -605,6 +805,35 @@ export class Menus {
 
     if (target && !(gesture.pickedUpAtStart && this._sameSlot(target, gesture.startTarget))) {
       this._recordMouseDropTarget(gesture, target);
+    }
+  }
+
+  _updateInventoryHover(target, point = null) {
+    const previous = this._hoveredInventorySlot;
+    if (previous?.el && previous.el !== target?.el) previous.el.classList.remove('hovered');
+    if (target?.el) target.el.classList.add('hovered');
+    this._hoveredInventorySlot = target || null;
+
+    const tooltip = this.inventoryTooltip;
+    const stack = target ? this._getSlotStack(target.kind, target.index) : null;
+    if (!tooltip || !stack) {
+      if (tooltip) tooltip.style.display = 'none';
+      return;
+    }
+
+    const def = BLOCKS[stack.id];
+    const durability = def?.durability > 0 && stack.dur != null
+      ? ` · Haltbarkeit ${stack.dur}/${def.durability}`
+      : '';
+    tooltip.textContent = `${getName(stack.id)}${stack.count > 1 ? ` ×${stack.count}` : ''}${durability}`;
+    tooltip.style.display = 'block';
+    if (point) {
+      const viewportWidth = window.innerWidth || document.documentElement?.clientWidth || 0;
+      const viewportHeight = window.innerHeight || document.documentElement?.clientHeight || 0;
+      const width = tooltip.offsetWidth || 190;
+      const height = tooltip.offsetHeight || 30;
+      tooltip.style.left = `${Math.max(8, Math.min(point.clientX + 14, viewportWidth - width - 8))}px`;
+      tooltip.style.top = `${Math.max(8, Math.min(point.clientY + 14, viewportHeight - height - 8))}px`;
     }
   }
 
@@ -637,7 +866,9 @@ export class Menus {
 
   _canPlaceInSlot(kind, index, stack) {
     if (!stack || kind === 'result') return false;
-    if (kind === 'inv' || kind === 'craft') return true;
+    if (kind === 'inv') return true;
+    if (kind === 'craft') return index >= 0 && index < this.craftGrid.length;
+    if (kind === 'equipment') return canEquipItem(stack, EQUIPMENT_SLOTS[index]);
     if (kind === 'container') return this._canPlaceInContainer(index, stack);
     return false;
   }
@@ -645,11 +876,10 @@ export class Menus {
   _mouseTargetCapacity(target) {
     if (!target || !this.heldStack || !this._canPlaceInSlot(target.kind, target.index, this.heldStack)) return 0;
     const current = this._getSlotStack(target.kind, target.index);
-    const max = BLOCKS[this.heldStack.id]?.maxStack || 64;
+    const slotName = target.kind === 'equipment' ? EQUIPMENT_SLOTS[target.index] : null;
+    const max = slotName && slotName !== 'offhand' ? 1 : (BLOCKS[this.heldStack.id]?.maxStack || 64);
     if (!current) return max;
-    if (current.id === this.heldStack.id && current.dur == null && this.heldStack.dur == null) {
-      return Math.max(0, max - current.count);
-    }
+    if (stacksEqual(current, this.heldStack)) return Math.max(0, max - current.count);
     return 0;
   }
 
@@ -661,7 +891,8 @@ export class Menus {
 
   _setSlotStack(kind, index, stack) {
     if (kind === 'inv') this.inventory.setSlot(index, stack);
-    else if (kind === 'craft') this.craftGrid[index] = stack;
+    else if (kind === 'craft' && index >= 0 && index < this.craftGrid.length) this.craftGrid[index] = stack;
+    else if (kind === 'equipment') this.inventory.setEquipment(EQUIPMENT_SLOTS[index], stack);
     else if (kind === 'container' && this.containerSession) this.containerSession.slots[index] = stack;
   }
 
@@ -673,6 +904,7 @@ export class Menus {
       id: this.heldStack.id,
       count,
       dur: this.heldStack.dur ?? null,
+      meta: this.heldStack.meta,
     });
     return count;
   }
@@ -715,9 +947,10 @@ export class Menus {
   }
 
   _getSlotStack(kind, index) {
-    if (kind === 'result') return matchRecipe(this.craftGrid);
+    if (kind === 'result') return this.craftRemainder || matchRecipe(this.craftGrid);
     if (kind === 'craft') return this.craftGrid[index] || null;
     if (kind === 'container') return this.containerSession?.slots[index] || null;
+    if (kind === 'equipment') return this.inventory.getEquipment(EQUIPMENT_SLOTS[index]);
     if (kind === 'inv') return this.inventory.getSlot(index);
     return null;
   }
@@ -852,7 +1085,7 @@ export class Menus {
     const slotEl = hit?.closest?.('.inv-slot') || (hit?.dataset?.slotKind ? hit : null);
     const kind = slotEl?.dataset?.slotKind;
     const index = Number(slotEl?.dataset?.slotIndex);
-    if (!slotEl || !['inv', 'craft', 'result', 'container'].includes(kind) || !Number.isInteger(index)) return null;
+    if (!slotEl || !['inv', 'craft', 'result', 'container', 'equipment'].includes(kind) || !Number.isInteger(index)) return null;
     return { el: slotEl, kind, index };
   }
 
@@ -921,6 +1154,7 @@ export class Menus {
   }
 
   _transferOneToCraft(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= this.craftGrid.length) return;
     const sourceIndex = this.transferSourceIndex;
     const source = sourceIndex >= 0 ? this.inventory.getSlot(sourceIndex) : null;
     if (!source || source.count < 1) {
@@ -932,10 +1166,7 @@ export class Menus {
     const target = this.craftGrid[index];
     if (target) {
       const maxStack = BLOCKS[source.id]?.maxStack || 64;
-      const canStack = target.id === source.id
-        && source.dur == null
-        && target.dur == null
-        && target.count < maxStack;
+      const canStack = stacksEqual(target, source) && target.count < maxStack;
       if (!canStack) {
         if (this.transferStatus) {
           this.transferStatus.textContent = target.id !== source.id
@@ -946,7 +1177,7 @@ export class Menus {
       }
       target.count += 1;
     } else {
-      this.craftGrid[index] = { id: source.id, count: 1, dur: source.dur ?? null };
+      this.craftGrid[index] = makeStack(source.id, 1, source.dur, source.meta);
     }
 
     source.count -= 1;
@@ -1041,11 +1272,14 @@ export class Menus {
 
     if (!this._canPlaceInSlot(kind, index, this.heldStack)) return false;
     if (!current) {
-      if (rightClick) {
+      const equipmentSlot = kind === 'equipment' ? EQUIPMENT_SLOTS[index] : null;
+      const singleEquipmentItem = equipmentSlot && equipmentSlot !== 'offhand';
+      if (rightClick || singleEquipmentItem) {
         this._setSlotStack(kind, index, {
           id: this.heldStack.id,
           count: 1,
           dur: this.heldStack.dur ?? null,
+          meta: this.heldStack.meta,
         });
         this.heldStack.count -= 1;
         if (this.heldStack.count <= 0) this.heldStack = null;
@@ -1056,8 +1290,11 @@ export class Menus {
       return true;
     }
 
-    if (current.id === this.heldStack.id && current.dur == null && this.heldStack.dur == null) {
-      const max = BLOCKS[current.id]?.maxStack || 64;
+    if (stacksEqual(current, this.heldStack)) {
+      const equipmentSlot = kind === 'equipment' ? EQUIPMENT_SLOTS[index] : null;
+      const max = equipmentSlot && equipmentSlot !== 'offhand'
+        ? 1
+        : (BLOCKS[current.id]?.maxStack || 64);
       const available = Math.max(0, max - current.count);
       const moved = rightClick
         ? Math.min(1, available, this.heldStack.count)
@@ -1077,9 +1314,148 @@ export class Menus {
     return false;
   }
 
+  _inventoryTargets(indices = null) {
+    const order = indices || Array.from({ length: 36 }, (_, index) => index);
+    return order.map((index) => ({ kind: 'inv', index }));
+  }
+
+  _inventoryCapacity(stack) {
+    if (!stack) return 0;
+    const def = BLOCKS[stack.id];
+    const max = Math.max(1, Number(def?.maxStack) || 64);
+    let capacity = 0;
+    for (const current of this.inventory.slots) {
+      if (!current) capacity += max;
+      else if (max > 1 && stacksEqual(current, stack)) capacity += Math.max(0, max - current.count);
+    }
+    return capacity;
+  }
+
+  _consumeCraftIngredients() {
+    for (let i = 0; i < this.craftGrid.length; i++) {
+      const stack = this.craftGrid[i];
+      if (!stack) continue;
+      stack.count -= 1;
+      if (stack.count <= 0) this.craftGrid[i] = null;
+    }
+  }
+
+  _craftResultIntoInventory() {
+    if (this.heldStack) return false;
+    let changed = false;
+    for (let crafts = 0; crafts < 128; crafts++) {
+      if (this.craftRemainder) {
+        const remainder = this.craftRemainder;
+        const amount = Math.min(remainder.count, this._inventoryCapacity(remainder));
+        if (amount <= 0) break;
+        const leftover = this.inventory.add(remainder.id, amount, remainder.dur, remainder.meta);
+        const moved = amount - leftover;
+        if (moved <= 0) break;
+        remainder.count -= moved;
+        if (remainder.count <= 0) this.craftRemainder = null;
+        changed = true;
+        if (leftover > 0) break;
+        continue;
+      }
+
+      const result = matchRecipe(this.craftGrid);
+      if (!result) break;
+      const resultStack = makeStack(result.id, result.count);
+      if (!resultStack || this._inventoryCapacity(resultStack) < result.count) break;
+      const leftover = this.inventory.add(result.id, result.count, resultStack.dur, resultStack.meta);
+      if (leftover > 0) break;
+      this._consumeCraftIngredients();
+      this.cb.onCraft && this.cb.onCraft(result);
+      changed = true;
+    }
+    if (changed) this.refreshInventory();
+    return changed;
+  }
+
+  _shiftClick(kind, index) {
+    if (kind === 'result') {
+      this._craftResultIntoInventory();
+      return;
+    }
+    const sourceStack = this._getSlotStack(kind, index);
+    if (!sourceStack) return;
+
+    if (kind === 'inv') {
+      if (this.containerSession?.type === 'chest') {
+        this._transferStackBetweenSlots(kind, index,
+          Array.from({ length: this.containerSession.slots.length }, (_, targetIndex) => ({ kind: 'container', index: targetIndex })));
+        return;
+      }
+      if (this.containerSession?.type === 'furnace') {
+        const targetIndex = canPlaceFurnaceItem(0, sourceStack.id) ? 0
+          : canPlaceFurnaceItem(1, sourceStack.id) ? 1 : -1;
+        if (targetIndex >= 0) this._transferStackBetweenSlots(kind, index, [{ kind: 'container', index: targetIndex }]);
+        return;
+      }
+
+      const equipmentSlot = BLOCKS[sourceStack.id]?.equipmentSlot;
+      if (EQUIPMENT_SLOTS.includes(equipmentSlot) && equipmentSlot !== 'offhand'
+          && !this.inventory.getEquipment(equipmentSlot)) {
+        const moved = this._transferStackBetweenSlots(kind, index, [
+          { kind: 'equipment', index: EQUIPMENT_SLOTS.indexOf(equipmentSlot) },
+        ]);
+        if (moved) return;
+      }
+      const targets = index < 9
+        ? Array.from({ length: 27 }, (_, offset) => ({ kind: 'inv', index: offset + 9 }))
+        : Array.from({ length: 9 }, (_, targetIndex) => ({ kind: 'inv', index: targetIndex }));
+      this._transferStackBetweenSlots(kind, index, targets);
+      return;
+    }
+
+    if (kind === 'container' && this.containerSession?.type === 'furnace' && index === 2) {
+      this._transferStackBetweenSlots(kind, index, this._inventoryTargets());
+      return;
+    }
+    if (kind === 'container' || kind === 'craft' || kind === 'equipment') {
+      this._transferStackBetweenSlots(kind, index, this._inventoryTargets());
+    }
+  }
+
+  _transferStackBetweenSlots(sourceKind, sourceIndex, targets) {
+    const original = this._getSlotStack(sourceKind, sourceIndex);
+    if (!original) return false;
+    let remaining = original.count;
+    const moving = { ...original };
+    let changed = false;
+
+    for (const target of targets) {
+      if (remaining <= 0 || (target.kind === sourceKind && target.index === sourceIndex)) continue;
+      if (!this._canPlaceInSlot(target.kind, target.index, moving)) continue;
+      const current = this._getSlotStack(target.kind, target.index);
+      const equipmentSlot = target.kind === 'equipment' ? EQUIPMENT_SLOTS[target.index] : null;
+      const max = equipmentSlot && equipmentSlot !== 'offhand'
+        ? 1
+        : Math.max(1, Number(BLOCKS[moving.id]?.maxStack) || 64);
+      const capacity = current
+        ? (stacksEqual(current, moving) ? Math.max(0, max - current.count) : 0)
+        : max;
+      const amount = Math.min(remaining, capacity);
+      if (amount <= 0) continue;
+
+      if (current) current.count += amount;
+      else this._setSlotStack(target.kind, target.index, { ...moving, count: amount });
+      remaining -= amount;
+      changed = true;
+    }
+
+    if (!changed) return false;
+    this._setSlotStack(sourceKind, sourceIndex, remaining > 0 ? { ...original, count: remaining } : null);
+    this.refreshInventory();
+    if (this.containerSession && this.cb.onContainerChange) {
+      this.cb.onContainerChange(this.containerSession.state, this.containerSession.type, -1);
+    }
+    return true;
+  }
+
   _slotClick(kind, index, button = 0) {
     if (kind === 'result') {
-      if (button === 0) this._takeCraftResult();
+      if (button === 0 || button === 2) this._takeCraftResult(button);
       return;
     }
     if (kind === 'container') {
@@ -1100,47 +1476,67 @@ export class Menus {
     }
   }
 
-  _takeCraftResult() {
-    const result = matchRecipe(this.craftGrid);
-    if (!result) return;
-    if (this.heldStack && (this.heldStack.id !== result.id || this.heldStack.count + result.count > 64)) return;
-    if (!this.heldStack) {
-      this.heldStack = { id: result.id, count: result.count, dur: BLOCKS[result.id]?.durability > 0 ? BLOCKS[result.id].durability : null };
+  _takeCraftResult(button = 0) {
+    const result = this.craftRemainder || matchRecipe(this.craftGrid);
+    if (!result) return false;
+    const rightClick = button === 2;
+    const outputCount = rightClick ? 1 : result.count;
+    const maxStack = Math.max(1, Number(BLOCKS[result.id]?.maxStack) || 64);
+    if (outputCount > maxStack) return false;
+    const resultStack = makeStack(result.id, outputCount, result.dur, result.meta);
+    if (!resultStack) return false;
+    if (this.heldStack) {
+      if (!stacksEqual(this.heldStack, resultStack)) return false;
+      if (this.heldStack.count + outputCount > maxStack) return false;
+    }
+
+    if (!this.heldStack) this.heldStack = resultStack;
+    else this.heldStack.count += outputCount;
+    if (!this.heldStack) return false;
+
+    if (this.craftRemainder) {
+      this.craftRemainder.count -= outputCount;
+      if (this.craftRemainder.count <= 0) this.craftRemainder = null;
     } else {
-      this.heldStack.count += result.count;
+      this._consumeCraftIngredients();
+      const uncollected = result.count - outputCount;
+      if (uncollected > 0) this.craftRemainder = makeStack(result.id, uncollected, result.dur, result.meta);
+      this.cb.onCraft && this.cb.onCraft(result);
     }
-    // Zutaten verbrauchen
-    for (let i = 0; i < 9; i++) {
-      const s = this.craftGrid[i];
-      if (s) {
-        s.count -= 1;
-        if (s.count <= 0) this.craftGrid[i] = null;
-      }
-    }
-    this.cb.onCraft && this.cb.onCraft(result);
     this.refreshInventory();
+    return true;
+  }
+
+  _returnStack(stack) {
+    if (!stack) return;
+    const leftover = this.inventory.add(stack.id, stack.count, stack.dur, stack.meta);
+    if (leftover > 0 && this.cb.onDropStack) {
+      this.cb.onDropStack(stack.id, leftover, { ...stack, count: leftover });
+    }
   }
 
   _returnCraftGrid() {
-    // Craft-Grid ins Inventar zurück
-    for (let i = 0; i < 9; i++) {
-      const s = this.craftGrid[i];
-      if (s) {
-        const leftover = this.inventory.add(s.id, s.count, s.dur);
-        if (leftover > 0 && this.cb.onDropStack) this.cb.onDropStack(s.id, leftover);
-        this.craftGrid[i] = null;
-      }
+    for (let i = 0; i < this.craftGrid.length; i++) {
+      const stack = this.craftGrid[i];
+      if (!stack) continue;
+      this._returnStack(stack);
+      this.craftGrid[i] = null;
     }
+    this.refreshInventory();
+  }
+
+  _returnCraftRemainder() {
+    if (!this.craftRemainder) return;
+    this._returnStack(this.craftRemainder);
+    this.craftRemainder = null;
     this.refreshInventory();
   }
 
   _dropHeld() {
-    if (this.heldStack) {
-      const leftover = this.inventory.add(this.heldStack.id, this.heldStack.count, this.heldStack.dur);
-      if (leftover > 0 && this.cb.onDropStack) this.cb.onDropStack(this.heldStack.id, leftover);
-      this.heldStack = null;
-      this.refreshInventory();
-    }
+    if (!this.heldStack) return;
+    this._returnStack(this.heldStack);
+    this.heldStack = null;
+    this.refreshInventory();
   }
 
   _drawSlot(slot, stack) {
@@ -1222,11 +1618,13 @@ export class Menus {
         this.singleTransferMode && slot.index === this.transferSourceIndex,
       );
     }
-    for (let i = 0; i < 9; i++) {
-      this._drawSlot(this.craftSlotEls[i], this.craftGrid[i]);
+    for (let i = 0; i < this.craftSlotEls.length; i++) {
+      this._drawSlot(this.craftSlotEls[i], i < this.craftGrid.length ? this.craftGrid[i] : null);
     }
-    const result = matchRecipe(this.craftGrid);
-    this._drawSlot(this.resultSlotEl, result ? { id: result.id, count: result.count, dur: null } : null);
+    for (const slotName of EQUIPMENT_SLOTS) {
+      this._drawSlot(this.equipmentSlotEls?.[slotName], this.inventory.getEquipment(slotName));
+    }
+    this._drawSlot(this.resultSlotEl, this._getSlotStack('result', 0));
 
     this._refreshContainerUI();
 
@@ -1235,9 +1633,9 @@ export class Menus {
         ? this.inventory.getSlot(this.transferSourceIndex)
         : null;
       if (!this.singleTransferMode) {
-        this.transferStatus.textContent = 'Ein Item pro Tipp: Modus starten, Inventar-Slot wählen, dann Crafting-Feld antippen.';
+        this.transferStatus.textContent = `Ein Item pro Tipp: Modus starten, Inventar-Slot wählen, dann ein ${this.craftingMode === 'workbench' ? '3×3' : '2×2'}-Crafting-Feld antippen.`;
       } else if (!selectedSource) {
-        this.transferStatus.textContent = 'Modus an: Tippe einen belegten Inventar-Slot an; danach ein 3×3-Feld. Pro Tipp wandert 1 Item.';
+        this.transferStatus.textContent = `Modus an: Tippe einen belegten Inventar-Slot an; danach ein ${this.craftingMode === 'workbench' ? '3×3' : '2×2'}-Feld. Pro Tipp wandert 1 Item.`;
       } else {
         this.transferStatus.textContent = `Ausgewählt: ${getName(selectedSource.id)} ×${selectedSource.count}. Tippe ein Crafting-Feld; je Tipp wandert 1 Item.`;
       }
@@ -1279,7 +1677,8 @@ export class Menus {
         <li><b>⬇ Taste:</b> Schleichen umschalten; im Flug sinken (aktiv markiert)</li>
         <li><b>⛏ Taste:</b> Block abbauen / Mob angreifen (halten)</li>
         <li><b>▣ Taste:</b> Block platzieren / Item benutzen</li>
-        <li><b>Rucksack:</b> Inventar & Crafting; Items antippen oder direkt ins 3×3-Feld ziehen</li>
+        <li><b>Rucksack:</b> 2×2-Spielercrafting; Werkbänke öffnen das 3×3-Feld. Items antippen oder ziehen.</li>
+        <li><b>Ausrüstung:</b> Die Nebenhand ist nutzbar; Rüstungsslots akzeptieren nur passende, im Spiel definierte Rüstungsitems.</li>
         <li><b>Ofen/Truhe:</b> Block ansehen und ▣ antippen; Slots per Tippen oder Ziehen bedienen</li>
         <li><b>Einzel-Item-Modus:</b> Schalter oben im Inventar drücken, Slot wählen und Crafting-Feld antippen; pro Tipp wird 1 Item gelegt</li>
         <li><b>⛶ Taste:</b> Vollbild ein- und ausschalten</li>
@@ -1304,7 +1703,9 @@ export class Menus {
         <li><b>Mittlere Maustaste:</b> Block kopieren (Kreativ)</li>
         <li><b>Mausrad / 1-9:</b> Schnellleiste</li>
         <li><b>E:</b> Inventar & Crafting &nbsp;|&nbsp; <b>Esc:</b> Pause</li>
-        <li><b>Im Inventar:</b> Linksklick nimmt/legt ganze Stapel; Rechtsklick nimmt die Hälfte oder legt 1 Item. Gedrückt ziehen verteilt Items.</li>
+        <li><b>Im Inventar:</b> Linksklick nimmt/legt Stapel; Rechtsklick nimmt die Hälfte oder legt 1 Item. Ziehen verteilt, Shift-Klick sortiert zwischen Hotbar und Inventar.</li>
+        <li><b>Crafting:</b> Das Spielerraster ist 2×2, Werkbänke bieten 3×3. Rechtsklick nimmt ein Ergebnis; Shift-Klick craftet so viel wie möglich.</li>
+        <li><b>Tooltips & Ausrüstung:</b> Über Items fahren; Nebenhand und definierte Ausrüstung werden gespeichert.</li>
         <li><b>F:</b> Fliegen umschalten &nbsp;|&nbsp; <b>F3:</b> Debug-Infos</li>
         <li><b>M:</b> Spielmodus wechseln &nbsp;|&nbsp; <b>P:</b> Friedlich umschalten</li>
         <li><b>T:</b> Tag/Nacht springen &nbsp;|&nbsp; <b>O:</b> Wetter umschalten</li>

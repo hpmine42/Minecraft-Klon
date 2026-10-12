@@ -262,13 +262,20 @@ ok(game.state === 'playing', 'Resume funktioniert');
   ok(true, 'Platzieren ohne Fehler');
 }
 
-// Inventar öffnen/schließen
-
-// Inventar öffnen/schließen
+// Inventar öffnen/schließen und temporäre Cursor-/Craftingstapel sicher zurückgeben.
 game.openInventory();
 ok(game.state === 'inventory', 'Inventar öffnet');
+game.inventory.setEquipment('offhand', { id: BLOCK.TORCH, count: 3, dur: null });
+game.menus.craftGrid[0] = { id: BLOCK.LOG, count: 1, dur: null };
+game.menus.heldStack = { id: BLOCK.SAND, count: 2, dur: null };
+const openInventorySave = game.saveNow();
+const openInventoryData = JSON.parse(localStorage.getItem('minecraft-klon-save-v1'));
+ok(openInventorySave && openInventoryData.inventoryUI.craftGrid[0]?.id === BLOCK.LOG
+  && openInventoryData.inventoryUI.heldStack?.count === 2,
+'Autospeicher-Snapshot bewahrt auch Cursor- und Craftingstapel');
 game.closeInventory();
-ok(game.state === 'playing', 'Inventar schließt');
+ok(game.state === 'playing' && game.inventory.count(BLOCK.LOG) >= 1 && game.inventory.count(BLOCK.SAND) >= 2,
+'Inventar schließt und gibt unverarbeitete Stacks zurück');
 
 // Speichern / Laden inklusive positionierter Ofen- und Truheninhalte
 game.world.furnaces.set('10,20,30', createFurnaceState({
@@ -280,6 +287,7 @@ game.world.furnaces.set('10,20,30', createFurnaceState({
 game.world.chests.set('11,20,30', createChestState({
   slots: [{ id: BLOCK.BREAD, count: 6 }, null],
 }));
+game._dropItems(BLOCK.SAND, 2);
 const saved = game.saveNow();
 ok(saved === true, 'Spiel speichern');
 ok(localStorage.getItem('minecraft-klon-save-v1') !== null, 'Spielstand im localStorage');
@@ -294,6 +302,11 @@ ok(game.world.furnaces.get('10,20,30')?.slots[0]?.count === 2
 'Ofeninhalt und Schmelzfortschritt werden gespeichert');
 ok(game.world.chests.get('11,20,30')?.slots[0]?.count === 6,
 'Truheninhalt wird gespeichert');
+ok(game.inventory.getEquipment('offhand')?.id === BLOCK.TORCH
+  && game.inventory.getEquipment('offhand')?.count === 3,
+'Ausrüstungs-Nebenhand wird mit der Welt gespeichert und geladen');
+ok(game.mobs.items.some((item) => item.itemId === BLOCK.SAND && item.count === 2),
+'Welt-Drops bleiben nach Speichern und Laden erhalten');
 
 // Tastatur: Strg sprintet ohne gleichzeitig zu schleichen, beide Strg-Tasten funktionieren.
 game.input.keys.clear();

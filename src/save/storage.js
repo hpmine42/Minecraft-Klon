@@ -18,6 +18,8 @@ export function saveGame(world, player, inventory, extra = {}) {
       stats: extra.stats ?? {},
       furnaces: Array.isArray(extra.furnaces) ? extra.furnaces : [],
       chests: Array.isArray(extra.chests) ? extra.chests : [],
+      inventoryUI: extra.inventoryUI || null,
+      droppedItems: Array.isArray(extra.droppedItems) ? extra.droppedItems : [],
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     return true;

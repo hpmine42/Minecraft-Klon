@@ -1,5 +1,5 @@
 // game.test.mjs — Tests für Inventar, Crafting, Spielerphysik, Speichern.
-import { Inventory, matchRecipe, makeStack, listRecipes, HOTBAR_SIZE } from '../src/player/inventory.js';
+import { Inventory, matchRecipe, makeStack, listRecipes, HOTBAR_SIZE, canEquipItem, EQUIPMENT_SLOTS } from '../src/player/inventory.js';
 import { BLOCKS, BLOCK, TOOL, breakSpeed, getDrop } from '../src/world/blocks.js';
 import { Player, PHYS, PLAYER_HEIGHT } from '../src/player/player.js';
 import { World } from '../src/world/world.js';
@@ -97,6 +97,14 @@ const axeGrid = grid([
 ok(matchRecipe(axeGrid)?.id === BLOCK.WOOD_AXE, 'Axt (auch gespiegelt)');
 // Kein Rezept
 ok(matchRecipe(grid([BLOCK.STONE, null, null, null, null, null, null, null, null])) === null, 'Kein Rezept für einzelnen Stein');
+// Spieler-Crafting verwendet ein echtes 2×2-Raster; Werkbankrezepte bleiben 3×3.
+const grid2 = (ids) => ids.map((id) => (id ? makeStack(id, 1) : null));
+ok(matchRecipe(grid2([BLOCK.PLANKS, null, BLOCK.PLANKS, null]))?.id === BLOCK.STICK,
+  '2×2-Spielercrafting erkennt das vertikale Stock-Rezept');
+ok(matchRecipe(grid2([BLOCK.PLANKS, BLOCK.PLANKS, BLOCK.PLANKS, BLOCK.PLANKS]))?.id === BLOCK.CRAFTING_TABLE,
+  '2×2-Spielercrafting erkennt die Werkbank');
+ok(matchRecipe(grid2([BLOCK.COBBLESTONE, BLOCK.COBBLESTONE, BLOCK.COBBLESTONE, null])) === null,
+  '3×3-Ofenrezept passt nicht fälschlich ins 2×2-Spielerraster');
 // Leeres Raster
 ok(matchRecipe(grid([null, null, null, null, null, null, null, null, null])) === null, 'Leeres Raster');
 // Rezeptliste vollständig
@@ -245,6 +253,18 @@ const inv5 = new Inventory();
 inv5.fromJSON(json);
 ok(inv5.count(BLOCK.DIAMOND) === 12, 'Inventar-Serialisierung (Items)');
 ok(inv5.count(BLOCK.IRON_PICKAXE) === 1, 'Inventar-Serialisierung (Werkzeug)');
+ok(EQUIPMENT_SLOTS.includes('offhand') && canEquipItem(makeStack(BLOCK.TORCH, 2), 'offhand')
+  && !canEquipItem(makeStack(BLOCK.IRON_PICKAXE), 'head'),
+'Nebenhand nutzt existierende Items; nicht definierte Rüstungsitems werden nicht erfunden');
+ok(inv4.setEquipment('offhand', makeStack(BLOCK.TORCH, 3))
+  && !inv4.setEquipment('head', makeStack(BLOCK.IRON_PICKAXE)),
+'Nebenhand ist ein nutzbarer persistenter Slot, Rüstungsslots bleiben definitionsgebunden');
+const equippedJSON = JSON.parse(JSON.stringify(inv4.toJSON()));
+const equippedInventory = new Inventory();
+equippedInventory.fromJSON(equippedJSON);
+ok(equippedInventory.getEquipment('offhand')?.id === BLOCK.TORCH
+  && equippedInventory.getEquipment('offhand')?.count === 3,
+'Nebenhand bleibt nach Speichern und Laden erhalten');
 
 player.gamemode = 'survival';
 player.yaw = 1.23;
@@ -333,9 +353,14 @@ const miningAudio = { dig() {} };
 const miningInteraction = new Interaction(
   miningWorld, miningPlayer, { held: () => null }, miningMobs, miningParticles, miningAudio,
 );
-const firstMineResult = miningInteraction.update(0.5, { attack: true }, null);
+const savedRandom = Math.random;
+Math.random = () => 0; // Auch der seltene Zwischenschritt-Partikelpfad bleibt deterministisch.
+const firstMineResult = miningInteraction.update(0.001, { attack: true }, null);
+Math.random = savedRandom;
 ok(firstMineResult.blockHit?.y === 3 && minedTargets[0] === '3,3,3',
-  'Gedrückthalten baut den ersten Block ab');
+  'Kreativmodus baut einen Block schon im ersten sehr kurzen Tick ab');
+ok(miningMobs.items.length === 0,
+  'Kreativabbau benötigt kein Werkzeug und erzeugt keine Blockdrops');
 ok(miningParticleCalls.some((call) => call[4] === 1)
   && miningParticleCalls.some((call) => call[4] === 14),
   'Bestehende Abbau- und Bruchpartikel bleiben neben den Rissen erhalten');

@@ -13,7 +13,9 @@ function ok(condition, message) {
 function makeMenus() {
   const menus = Object.create(Menus.prototype);
   menus.inventory = new Inventory();
-  menus.craftGrid = Array(9).fill(null);
+  menus.craftGrid = Array(4).fill(null);
+  menus.craftingMode = 'player';
+  menus.craftRemainder = null;
   menus.heldStack = null;
   menus.containerSession = null;
   menus.containerNotice = null;
@@ -126,6 +128,57 @@ menus.heldStack = { id: BLOCK.IRON_ORE, count: 4, dur: null };
 menus._slotClick('container', 0, 2);
 ok(furnaceState.slots[0]?.count === 1 && menus.heldStack?.count === 3,
 'Rechtsklick legt genau ein passendes Rohstoff-Item in den Ofen');
+
+// Shift-Klick verschiebt komplette Stapel zwischen Hauptinventar und Hotbar.
+const shiftMenus = makeMenus();
+shiftMenus.inventory.setSlot(12, { id: BLOCK.DIRT, count: 17, dur: null });
+shiftMenus._shiftClick('inv', 12);
+ok(shiftMenus.inventory.getSlot(12) === null && shiftMenus.inventory.getSlot(0)?.count === 17,
+  'Shift-Klick verschiebt einen Stapel aus dem Hauptinventar in die Hotbar');
+shiftMenus._shiftClick('inv', 0);
+ok(shiftMenus.inventory.getSlot(0) === null && shiftMenus.inventory.getSlot(9)?.count === 17,
+  'Shift-Klick verschiebt einen Hotbar-Stapel zurück ins Hauptinventar');
+
+// Shift-Klick auf das Ergebnis stellt wiederholt Rezepte her, solange Platz vorhanden ist.
+shiftMenus.craftGrid = [
+  { id: BLOCK.PLANKS, count: 2, dur: null }, null,
+  { id: BLOCK.PLANKS, count: 2, dur: null }, null,
+];
+shiftMenus._shiftClick('result', 0);
+ok(shiftMenus.inventory.count(BLOCK.STICK) === 8
+  && shiftMenus.craftGrid.every((stack) => !stack),
+'Crafting-Ergebnis per Shift-Klick stellt alle möglichen Rezepte her und lagert sie ein');
+
+// Rechtsklick auf einen Crafting-Ausgang nimmt eines und hält den Rest sicher bereit.
+const rightCraft = makeMenus();
+rightCraft.craftGrid = [{ id: BLOCK.LOG, count: 1, dur: null }, null, null, null];
+rightCraft._takeCraftResult(2);
+ok(rightCraft.heldStack?.id === BLOCK.PLANKS && rightCraft.heldStack.count === 1
+  && rightCraft.craftRemainder?.count === 3 && rightCraft.craftGrid.every((stack) => !stack),
+'Rechtsklick auf ein 4er-Rezept nimmt eins und bewahrt die übrigen drei Ergebnisse');
+rightCraft._takeCraftResult(0);
+ok(rightCraft.heldStack?.count === 4 && rightCraft.craftRemainder === null,
+'Übrige Crafting-Ergebnisse lassen sich ohne erneuten Zutatenverbrauch einsammeln');
+
+// Schließen gibt Cursor- und Craftingstapel zurück; bei voller Tasche wird genau
+// der nicht einlagerbare Rest als einzelner Item-Drop weitergegeben.
+const closeMenus = makeMenus();
+closeMenus.craftGrid = [{ id: BLOCK.SAND, count: 5, dur: null }, null, null, null];
+closeMenus.heldStack = { id: BLOCK.DIRT, count: 3, dur: null };
+closeMenus.closeActiveInventory();
+ok(closeMenus.inventory.count(BLOCK.SAND) === 5 && closeMenus.inventory.count(BLOCK.DIRT) === 3
+  && closeMenus.craftGrid.every((stack) => !stack) && closeMenus.heldStack === null,
+'Inventar schließen bringt Crafting- und Cursorstapel zurück ins Inventar');
+const fullMenus = makeMenus();
+const overflowDrops = [];
+fullMenus.cb.onDropStack = (id, count) => overflowDrops.push({ id, count });
+for (let index = 0; index < fullMenus.inventory.slots.length; index++) {
+  fullMenus.inventory.setSlot(index, { id: BLOCK.DIRT, count: 64, dur: null });
+}
+fullMenus.heldStack = { id: BLOCK.SAND, count: 2, dur: null };
+fullMenus.closeActiveInventory();
+ok(overflowDrops.length === 1 && overflowDrops[0].id === BLOCK.SAND && overflowDrops[0].count === 2,
+'Volles Inventar gibt den übrigen Cursorstapel genau einmal als Drop zurück');
 
 console.log(`\n${passed} bestanden, ${failed} fehlgeschlagen`);
 if (failed > 0) process.exit(1);

@@ -3,82 +3,117 @@ import { BLOCKS, BLOCK, TOOL, isPlaceable } from '../world/blocks.js';
 
 export const HOTBAR_SIZE = 9;
 export const INV_SIZE = 36; // 0-8 Hotbar, 9-35 Inventar
+export const EQUIPMENT_SLOTS = Object.freeze(['head', 'chest', 'legs', 'feet', 'offhand']);
 
-/** Ein Slot: null | { id, count, dur } */
-export function makeStack(id, count = 1, dur = null) {
+function emptyEquipment() {
+  return Object.fromEntries(EQUIPMENT_SLOTS.map((slot) => [slot, null]));
+}
+
+function cloneMeta(meta) {
+  if (meta == null) return null;
+  if (typeof meta !== 'object') return meta;
+  try { return JSON.parse(JSON.stringify(meta)); } catch { return null; }
+}
+
+function metaKey(meta) {
+  if (meta == null) return '';
+  if (typeof meta !== 'object') return String(meta);
+  if (Array.isArray(meta)) return `[${meta.map(metaKey).join(',')}]`;
+  return `{${Object.keys(meta).sort().map((key) => `${key}:${metaKey(meta[key])}`).join(',')}}`;
+}
+
+/** Ein Slot: null | { id, count, dur, meta }. Ungültige Items werden verworfen. */
+export function makeStack(id, count = 1, dur = null, meta = null) {
   const def = BLOCKS[id];
-  if (!def) return null;
-  const maxDur = def.durability || 0;
+  const amount = Math.floor(Number(count));
+  if (!def || !Number.isFinite(amount) || amount < 1) return null;
+  const maxStack = Math.max(1, Number(def.maxStack) || 64);
+  const maxDur = Math.max(0, Number(def.durability) || 0);
+  const durability = maxDur > 0
+    ? Math.max(0, Math.min(maxDur, Math.floor(dur == null ? maxDur : Number(dur))))
+    : null;
   return {
     id,
-    count,
-    dur: dur != null ? dur : (maxDur > 0 ? maxDur : null),
+    count: Math.min(amount, maxStack),
+    dur: Number.isFinite(durability) ? durability : null,
+    ...(meta == null ? {} : { meta: cloneMeta(meta) }),
   };
 }
 
 export function stacksEqual(a, b) {
   if (!a || !b) return false;
-  return a.id === b.id && (a.dur ?? null) === (b.dur ?? null);
+  return a.id === b.id
+    && (a.dur ?? null) === (b.dur ?? null)
+    && metaKey(a.meta) === metaKey(b.meta);
+}
+
+/** Rüstung wird nur akzeptiert, wenn eine existierende Itemdefinition den Slot nennt. */
+export function canEquipItem(stack, slot) {
+  if (!stack || !BLOCKS[stack.id] || !EQUIPMENT_SLOTS.includes(slot)) return false;
+  if (slot === 'offhand') return true;
+  return BLOCKS[stack.id].equipmentSlot === slot;
 }
 
 export class Inventory {
   constructor(size = INV_SIZE) {
     this.slots = new Array(size).fill(null);
     this.selected = 0; // Hotbar-Index
+    this.equipment = emptyEquipment();
   }
 
   /** Aktuell ausgewählter Stapel. */
   held() {
-    return this.slots[this.selected];
+    return this.slots[this.selected] || null;
   }
 
   /** Item hinzufügen. Gibt übrige Anzahl zurück (0 = alles aufgenommen). */
-  add(id, count = 1, dur = null) {
+  add(id, count = 1, dur = null, meta = null) {
     const def = BLOCKS[id];
-    if (!def) return count;
-    const maxStack = def.maxStack || 64;
-    // Zuerst in vorhandene Stapel (nur ohne Haltbarkeit/Tools)
+    let remaining = Math.floor(Number(count));
+    if (!def || !Number.isFinite(remaining) || remaining <= 0) return Number.isFinite(remaining) ? Math.max(0, remaining) : 0;
+    const maxStack = Math.max(1, Number(def.maxStack) || 64);
+    const stackMeta = cloneMeta(meta);
+
+    // Zuerst kompatible Stapel füllen. Beschädigte Werkzeuge bleiben Einzelstücke.
     if (maxStack > 1 && dur == null && !(def.durability > 0)) {
-      for (let i = 0; i < this.slots.length && count > 0; i++) {
-        const s = this.slots[i];
-        if (s && s.id === id && s.count < maxStack && s.dur == null) {
-          const space = maxStack - s.count;
-          const move = Math.min(space, count);
-          s.count += move;
-          count -= move;
+      for (let i = 0; i < this.slots.length && remaining > 0; i++) {
+        const current = this.slots[i];
+        if (current && current.id === id && current.dur == null
+            && metaKey(current.meta) === metaKey(stackMeta) && current.count < maxStack) {
+          const moved = Math.min(maxStack - current.count, remaining);
+          current.count += moved;
+          remaining -= moved;
         }
       }
     }
-    // Dann in leere Slots
-    for (let i = 0; i < this.slots.length && count > 0; i++) {
+
+    // Danach freie Slots belegen; jedes Item bleibt innerhalb seiner Stapelgrenze.
+    for (let i = 0; i < this.slots.length && remaining > 0; i++) {
       if (this.slots[i] == null) {
-        const move = Math.min(maxStack, count);
-        this.slots[i] = makeStack(id, move, dur);
-        count -= move;
+        const moved = Math.min(maxStack, remaining);
+        this.slots[i] = makeStack(id, moved, dur, stackMeta);
+        remaining -= moved;
       }
     }
-    return count;
+    return remaining;
   }
 
   /** Anzahl eines Items im Inventar. */
   count(id) {
-    let n = 0;
-    for (const s of this.slots) {
-      if (s && s.id === id) n += s.count;
-    }
-    return n;
+    return this.slots.reduce((total, stack) => total + (stack?.id === id ? stack.count : 0), 0);
   }
 
   /** Konsumiert Items. Gibt true, wenn genug vorhanden waren. */
   consume(id, count = 1) {
-    if (this.count(id) < count) return false;
-    for (let i = 0; i < this.slots.length && count > 0; i++) {
-      const s = this.slots[i];
-      if (s && s.id === id) {
-        const take = Math.min(s.count, count);
-        s.count -= take;
-        count -= take;
-        if (s.count <= 0) this.slots[i] = null;
+    let remaining = Math.floor(Number(count));
+    if (!Number.isFinite(remaining) || remaining < 0 || this.count(id) < remaining) return false;
+    for (let i = 0; i < this.slots.length && remaining > 0; i++) {
+      const stack = this.slots[i];
+      if (stack && stack.id === id) {
+        const take = Math.min(stack.count, remaining);
+        stack.count -= take;
+        remaining -= take;
+        if (stack.count <= 0) this.slots[i] = null;
       }
     }
     return true;
@@ -86,70 +121,124 @@ export class Inventory {
 
   /** Slot-Inhalt setzen (für Drag&Drop). */
   setSlot(i, stack) {
-    if (i >= 0 && i < this.slots.length) this.slots[i] = stack;
+    if (!Number.isInteger(i) || i < 0 || i >= this.slots.length) return false;
+    if (stack == null) {
+      this.slots[i] = null;
+      return true;
+    }
+    const normalized = makeStack(stack.id, stack.count, stack.dur, stack.meta);
+    if (!normalized || normalized.count !== Math.floor(Number(stack.count))) return false;
+    this.slots[i] = normalized;
+    return true;
   }
 
   getSlot(i) {
-    return (i >= 0 && i < this.slots.length) ? this.slots[i] : null;
+    return Number.isInteger(i) && i >= 0 && i < this.slots.length ? this.slots[i] : null;
+  }
+
+  getEquipment(slot) {
+    return EQUIPMENT_SLOTS.includes(slot) ? this.equipment[slot] : null;
+  }
+
+  setEquipment(slot, stack) {
+    if (!EQUIPMENT_SLOTS.includes(slot)) return false;
+    if (stack == null) {
+      this.equipment[slot] = null;
+      return true;
+    }
+    if (!canEquipItem(stack, slot)) return false;
+    const maxStack = Math.max(1, Number(BLOCKS[stack.id]?.maxStack) || 64);
+    if (stack.count > maxStack || (slot !== 'offhand' && stack.count !== 1)) return false;
+    this.equipment[slot] = makeStack(stack.id, stack.count, stack.dur, stack.meta);
+    return !!this.equipment[slot];
   }
 
   /** Zwei Slots tauschen/vereinen. */
   swapSlots(a, b) {
-    const sa = this.slots[a];
-    const sb = this.slots[b];
-    if (sa && sb && stacksEqual(sa, sb)) {
-      const def = BLOCKS[sa.id];
-      const maxStack = (def && def.maxStack) || 64;
-      const space = maxStack - sb.count;
-      const move = Math.min(space, sa.count);
-      sb.count += move;
-      sa.count -= move;
-      if (sa.count <= 0) this.slots[a] = null;
+    if (!Number.isInteger(a) || !Number.isInteger(b)
+        || a < 0 || b < 0 || a >= this.slots.length || b >= this.slots.length || a === b) return;
+    const stackA = this.slots[a];
+    const stackB = this.slots[b];
+    if (stackA && stackB && stacksEqual(stackA, stackB)) {
+      const maxStack = Math.max(1, Number(BLOCKS[stackA.id]?.maxStack) || 64);
+      const moved = Math.min(Math.max(0, maxStack - stackB.count), stackA.count);
+      stackB.count += moved;
+      stackA.count -= moved;
+      if (stackA.count <= 0) this.slots[a] = null;
     } else {
-      this.slots[a] = sb;
-      this.slots[b] = sa;
+      this.slots[a] = stackB;
+      this.slots[b] = stackA;
     }
   }
 
   /** Haltbarkeit des gehaltenen Werkzeugs reduzieren. */
   damageHeld(amount = 1) {
-    const s = this.held();
-    if (!s) return null;
-    const def = BLOCKS[s.id];
-    if (!def || !def.durability) return s;
-    if (s.dur == null) s.dur = def.durability;
-    s.dur -= amount;
-    if (s.dur <= 0) {
+    const stack = this.held();
+    if (!stack) return null;
+    const def = BLOCKS[stack.id];
+    if (!def || !def.durability) return stack;
+    if (stack.dur == null) stack.dur = def.durability;
+    stack.dur -= Math.max(0, Number(amount) || 0);
+    if (stack.dur <= 0) {
       this.slots[this.selected] = null;
       return null;
     }
-    return s;
+    return stack;
   }
 
   /** Schadensbonus des gehaltenen Werkzeugs. */
   heldDamage() {
-    const s = this.held();
-    if (!s) return 1;
-    const def = BLOCKS[s.id];
+    const stack = this.held();
+    if (!stack) return 1;
+    const def = BLOCKS[stack.id];
     return def && def.damage > 0 ? def.damage : 1;
   }
 
-  /** Serialisierung. */
+  /** Serialisierung mit rückwärtskompatiblem equipment-Feld. */
   toJSON() {
+    const serialize = (stack) => (stack ? {
+      id: stack.id,
+      count: stack.count,
+      dur: stack.dur,
+      ...(stack.meta == null ? {} : { meta: cloneMeta(stack.meta) }),
+    } : null);
     return {
       selected: this.selected,
-      slots: this.slots.map((s) => (s ? { id: s.id, count: s.count, dur: s.dur } : null)),
+      slots: this.slots.map(serialize),
+      equipment: Object.fromEntries(EQUIPMENT_SLOTS.map((slot) => [slot, serialize(this.equipment[slot])])),
     };
   }
 
   fromJSON(data) {
     if (!data) return;
-    this.selected = data.selected || 0;
+    const selected = Number.isInteger(data.selected) ? data.selected : 0;
+    this.selected = Math.max(0, Math.min(HOTBAR_SIZE - 1, selected));
     this.slots = new Array(this.slots.length).fill(null);
+    this.equipment = emptyEquipment();
     if (Array.isArray(data.slots)) {
+      const overflow = [];
       for (let i = 0; i < Math.min(this.slots.length, data.slots.length); i++) {
-        const s = data.slots[i];
-        if (s) this.slots[i] = makeStack(s.id, s.count, s.dur);
+        const source = data.slots[i];
+        if (!source) continue;
+        const originalCount = Math.max(0, Math.floor(Number(source.count) || 0));
+        const stack = makeStack(source.id, originalCount, source.dur, source.meta);
+        if (!stack) continue;
+        this.slots[i] = stack;
+        if (originalCount > stack.count) overflow.push({ ...source, count: originalCount - stack.count });
+      }
+      for (const stack of overflow) this.add(stack.id, stack.count, stack.dur, stack.meta);
+    }
+    if (data.equipment && typeof data.equipment === 'object') {
+      for (const slot of EQUIPMENT_SLOTS) {
+        const stack = data.equipment[slot];
+        if (!stack) continue;
+        const normalized = makeStack(stack.id, stack.count, stack.dur, stack.meta);
+        if (normalized && canEquipItem(normalized, slot)
+            && (slot === 'offhand' || normalized.count === 1)) {
+          this.equipment[slot] = normalized;
+        } else {
+          this.add(normalized?.id ?? stack.id, normalized?.count ?? stack.count, normalized?.dur ?? stack.dur, normalized?.meta ?? stack.meta);
+        }
       }
     }
   }
@@ -222,73 +311,71 @@ export const RECIPES = [
 ];
 
 /**
- * Prüft ob das 3x3-Raster (9 Slots, null = leer) zu einem Rezept passt.
+ * Prüft ein Spieler- (2×2) oder Werkbank- (3×3) Crafting-Raster.
  * @returns {{id:number,count:number}|null}
  */
 export function matchRecipe(grid) {
-  if (!grid || grid.length !== 9) return null;
-  const ids = grid.map((s) => (s ? s.id : null));
-  if (ids.every((i) => i == null)) return null;
+  if (!Array.isArray(grid) || ![4, 9].includes(grid.length)) return null;
+  const size = Math.sqrt(grid.length);
+  const ids = grid.map((stack) => (stack ? stack.id : null));
+  if (ids.every((id) => id == null)) return null;
 
-  // Belegtes Rechteck finden
-  let minR = 3, maxR = -1, minC = 3, maxC = -1;
-  for (let r = 0; r < 3; r++) {
-    for (let c = 0; c < 3; c++) {
-      if (ids[r * 3 + c] != null) {
-        minR = Math.min(minR, r); maxR = Math.max(maxR, r);
-        minC = Math.min(minC, c); maxC = Math.max(maxC, c);
+  // Nichtleeres Rechteck bestimmen, damit Rezepte an jeder Rasterposition passen.
+  let minR = size, maxR = -1, minC = size, maxC = -1;
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (ids[r * size + c] != null) {
+        minR = Math.min(minR, r);
+        maxR = Math.max(maxR, r);
+        minC = Math.min(minC, c);
+        maxC = Math.max(maxC, c);
       }
     }
   }
-  const w = maxC - minC + 1;
-  const h = maxR - minR + 1;
-  const cells = [];
-  for (let r = 0; r < h; r++) {
-    cells.push([]);
-    for (let c = 0; c < w; c++) {
-      cells[r].push(ids[(minR + r) * 3 + (minC + c)]);
-    }
-  }
-
-  const usedIds = ids.filter((i) => i != null);
+  const width = maxC - minC + 1;
+  const height = maxR - minR + 1;
+  const cells = Array.from({ length: height }, (_, r) =>
+    Array.from({ length: width }, (_, c) => ids[(minR + r) * size + minC + c] ?? null));
+  const usedIds = ids.filter((id) => id != null);
 
   for (const recipe of RECIPES) {
     if (recipe.type === 'shapeless') {
-      const need = [...recipe.ingredients];
-      const have = [...usedIds];
-      if (need.length !== have.length) continue;
-      let okAll = true;
-      for (const n of need) {
-        const idx = have.indexOf(n);
-        if (idx === -1) { okAll = false; break; }
-        have.splice(idx, 1);
+      if (recipe.ingredients.length !== usedIds.length) continue;
+      const remaining = [...usedIds];
+      let matched = true;
+      for (const ingredient of recipe.ingredients) {
+        const index = remaining.indexOf(ingredient);
+        if (index < 0) {
+          matched = false;
+          break;
+        }
+        remaining.splice(index, 1);
       }
-      if (okAll && have.length === 0) return { ...recipe.result };
-    } else {
-      const pat = recipe.pattern.map((row) => row.split(''));
-      const ph = pat.length;
-      const pw = Math.max(...pat.map((r) => r.length));
-      if (ph !== h || pw !== w) continue;
+      if (matched && remaining.length === 0) return { ...recipe.result };
+      continue;
+    }
 
-      const tryMatch = (gridCells, mirror) => {
-        for (let r = 0; r < ph; r++) {
-          for (let c = 0; c < pw; c++) {
-            const ch = mirror ? pat[r][pw - 1 - c] || ' ' : pat[r][c] || ' ';
-            const cell = gridCells[r][c];
-            if (ch === ' ') {
-              if (cell != null) return false;
-            } else {
-              const want = recipe.key[ch];
-              if (cell !== want) return false;
-            }
+    const pattern = recipe.pattern.map((row) => row.split(''));
+    const patternHeight = pattern.length;
+    const patternWidth = Math.max(...pattern.map((row) => row.length));
+    if (patternHeight !== height || patternWidth !== width) continue;
+
+    const matches = (mirror) => {
+      for (let r = 0; r < patternHeight; r++) {
+        for (let c = 0; c < patternWidth; c++) {
+          const patternColumn = mirror ? patternWidth - 1 - c : c;
+          const symbol = pattern[r][patternColumn] || ' ';
+          const cell = cells[r][c];
+          if (symbol === ' ') {
+            if (cell != null) return false;
+          } else if (cell !== recipe.key[symbol]) {
+            return false;
           }
         }
-        return true;
-      };
-      if (tryMatch(cells, false) || tryMatch(cells, true)) {
-        return { ...recipe.result };
       }
-    }
+      return true;
+    };
+    if (matches(false) || matches(true)) return { ...recipe.result };
   }
   return null;
 }
