@@ -402,7 +402,8 @@ export function buildChunkGeometry(world, chunk) {
                 corner.uv[1] ? uvRect.v1 : uvRect.v0
               );
             }
-            const aoLight = isTrans || isFluid ? 1 : 1 - (aoValues[ci] * 0.13);
+            // Etwas kräftigere, aber weiterhin begrenzte Eckabdunklung gibt den Pixelblöcken mehr räumliche Tiefe.
+            const aoLight = isTrans || isFluid ? 1 : 1 - (aoValues[ci] * 0.16);
             const l = Math.max(0.06, lightValues[ci]) * face.shade * aoLight;
             target.c.push(l, l, l);
           }

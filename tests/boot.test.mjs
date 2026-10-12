@@ -195,6 +195,7 @@ ok(!!game.world || game.state === 'menu', 'Welt noch nicht nötig im Menü');
 ok(!!game.hud, 'HUD initialisiert');
 ok(!!game.menus, 'Menüs initialisiert');
 ok(game.menus.activeScreen === 'main-menu', `Hauptmenü sichtbar (${game.menus.activeScreen})`);
+ok(!!game.menuPreview?.root.visible && game.menuPreview.root.children.length >= 4, 'Texturiertes Voxel-Diorama im Hauptmenü sichtbar');
 ok(typeof game.startNewWorld === 'function', 'startNewWorld vorhanden');
 
 // Neue Welt starten (asynchron über setTimeout)
@@ -203,6 +204,7 @@ document.getElementById('world-type').value = 'normal';
 document.getElementById('game-mode').value = 'survival';
 document.getElementById('peaceful-mode').checked = true;
 game.startNewWorld();
+ok(!game.menuPreview.root.visible, 'Menü-Diorama wird beim Weltstart ausgeblendet');
 await new Promise((r) => setTimeout(r, 500));
 ok(game.state === 'playing', `Zustand nach Start: ${game.state}`);
 ok(!!game.world && game.world.chunks.size > 0, `Welt generiert (${game.world ? game.world.chunks.size : 0} Chunks)`);

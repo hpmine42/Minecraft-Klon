@@ -392,8 +392,9 @@ ok(game.state === 'paused', 'Menü-Button öffnet Pause');
 menuBtn.dispatch('touchstart', makeEvent([{ identifier: 10, clientX: 10, clientY: 10 }]));
 ok(game.state === 'playing', 'Menü-Button kehrt zurück');
 
-// Vollbildmodus ist auch im Hauptmenü erreichbar (der HUD-Button liegt hinter dem Menü-Overlay).
+// Vollbildmodus ist auch im Hauptmenü erreichbar; der doppelte HUD-Button wird dort ausgeblendet.
 game.menus.showScreen('main-menu');
+ok(elById('btn-fullscreen').style.display === 'none', 'HUD-Vollbildknopf kollidiert im Hauptmenü nicht mit dem Menü');
 const menuFullscreenBtn = elById('btn-fullscreen-menu');
 menuFullscreenBtn.dispatch('touchend', makeEvent([{ identifier: 23, clientX: 20, clientY: 20 }]));
 await new Promise((r) => setTimeout(r, 0));
@@ -403,6 +404,7 @@ menuFullscreenBtn.dispatch('touchend', makeEvent([{ identifier: 24, clientX: 20,
 await new Promise((r) => setTimeout(r, 0));
 ok(document.fullscreenElement === null, 'Vollbildknopf im Hauptmenü beendet Vollbild wieder');
 game.menus.hideAll();
+ok(elById('btn-fullscreen').style.display === '', 'HUD-Vollbildknopf wird nach dem Hauptmenü wieder eingeblendet');
 
 // Der HUD-Knopf funktioniert während des Spiels ebenfalls.
 const fullscreenBtn = elById('btn-fullscreen');

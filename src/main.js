@@ -16,6 +16,7 @@ import { HUD } from './ui/hud.js';
 import { BlockOutline } from './ui/block-outline.js';
 import { BlockCracks } from './ui/block-cracks.js';
 import { Menus } from './ui/menus.js';
+import { createMenuPreview } from './ui/menu-preview.js';
 import { DebugOverlay } from './ui/debug.js';
 import { runSelfTest, renderSelfTest } from './ui/selftest.js';
 import {
@@ -55,6 +56,8 @@ class Game {
     this.blockCracks = new BlockCracks(this.engine.scene);
     this.atlasCanvas = createAtlasCanvas(1337);
     this._applyAtlas();
+    this.menuPreview = createMenuPreview(this.engine.scene, this.atlasTexture);
+    this.menuPreview.updateCamera(this.engine.camera, 0);
 
     this.audio = new AudioEngine();
     this.audio.setVolume(this.settings.volume);
@@ -272,6 +275,7 @@ class Game {
       }
     }
 
+    this.menuPreview?.setVisible(false);
     this.menus.setLoading('Welt wird generiert…');
     this.state = 'loading';
 
@@ -324,6 +328,7 @@ class Game {
       this.startNewWorld();
       return;
     }
+    this.menuPreview?.setVisible(false);
     this.menus.setLoading('Spielstand wird geladen…');
     this.state = 'loading';
     setTimeout(() => {
@@ -394,6 +399,7 @@ class Game {
 
   quitToMenu() {
     this.state = 'menu';
+    this.menuPreview?.setVisible(!this.world);
     if (this.input.locked) this.input.unlock();
     this.menus.showScreen('main-menu');
     this.menus.setHasSave(hasSave());
@@ -451,7 +457,15 @@ class Game {
     const menuButton = $('btn-fullscreen-menu');
     if (menuButton) {
       menuButton.setAttribute('aria-pressed', String(active));
-      menuButton.textContent = active ? '⛶ Vollbildmodus beenden' : '⛶ Vollbildmodus aktivieren';
+      menuButton.setAttribute('aria-label', label);
+      const title = menuButton.querySelector && menuButton.querySelector('strong');
+      const detail = menuButton.querySelector && menuButton.querySelector('small');
+      if (title && title.parentElement) {
+        title.textContent = active ? 'Vollbild beenden' : 'Vollbild';
+        if (detail && detail.parentElement) detail.textContent = active ? 'Zurück zum Fenster' : 'Bildschirm füllen';
+      } else {
+        menuButton.textContent = active ? '⛶ Vollbildmodus beenden' : '⛶ Vollbildmodus aktivieren';
+      }
     }
   }
 
@@ -686,7 +700,13 @@ class Game {
       this.blockOutline?.hide();
       this.blockCracks?.hide();
     }
-    if (this.state === 'playing' || this.state === 'inventory' || this.state === 'paused' || this.state === 'dead') {
+    if (this.state === 'menu') {
+      // Das Voxel-Diorama bewegt sich nur im Menü langsam; auf Touch-Geräten bleibt es genauso leichtgewichtig.
+      if (this.menuPreview?.root.visible) this.menuPreview.updateCamera(this.engine.camera, time / 1000);
+      this.engine.updateSky(this.timeOfDay, this.settings.renderDistance, dt, 0);
+      this.engine.updateFov(false, dt);
+      this.engine.render();
+    } else if (this.state === 'playing' || this.state === 'inventory' || this.state === 'paused' || this.state === 'dead') {
       if (this.state === 'playing') {
         this._updatePlaying(dt);
       }
