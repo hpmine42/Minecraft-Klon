@@ -166,44 +166,85 @@
 
     <!-- Einstellungen -->
     <div id="settings-screen" class="screen">
-      <div class="menu-panel wide">
-        <h2>Einstellungen</h2>
+      <div class="menu-panel wide settings-panel">
+        <header class="settings-header">
+          <div>
+            <div class="settings-kicker"><span class="settings-kicker-mark" aria-hidden="true"></span> WERKBANK · SPIELOPTIONEN</div>
+            <h2><span class="settings-title-icon" aria-hidden="true">⚙</span> Einstellungen</h2>
+          </div>
+          <span class="settings-header-badge">OPTIONEN</span>
+        </header>
+        <p class="settings-intro">Passe Welt, Steuerung und Spielgefühl an. Änderungen werden direkt übernommen.</p>
+
         <div class="settings-grid">
-          <label>Renderdistanz <span id="setting-render-distance-value" class="val"></span>
-            <input id="setting-render-distance" type="range" min="2" max="10" step="1">
-          </label>
-          <label>Sichtfeld (FOV) <span id="setting-fov-value" class="val"></span>
-            <input id="setting-fov" type="range" min="60" max="110" step="1">
-          </label>
-          <label>Maus-/Blickempfindlichkeit <span id="setting-sensitivity-value" class="val"></span>
-            <input id="setting-sensitivity" type="range" min="0.0008" max="0.009" step="0.0002">
-          </label>
-          <label>Lautstärke <span id="setting-volume-value" class="val"></span>
-            <input id="setting-volume" type="range" min="0" max="1" step="0.05">
-          </label>
-          <label>Tageslänge <span id="setting-day-length-value" class="val"></span>
-            <input id="setting-day-length" type="range" min="0" max="1800" step="60">
-          </label>
-          <label>Partikel
-            <select id="setting-particles">
-              <option value="high">Viel</option>
-              <option value="low">Wenig</option>
-            </select>
-          </label>
-          <label class="check-label">
-            <input id="setting-invert-y" type="checkbox"> Y-Achse invertieren
-          </label>
-          <label class="check-label">
-            <input id="setting-debug" type="checkbox"> Debug-Infos anzeigen (F3)
-          </label>
-          <label class="check-label">
-            <input id="setting-autosave" type="checkbox" checked> Automatisch speichern
-          </label>
+          <section class="settings-group" aria-labelledby="settings-world-title">
+            <h3 id="settings-world-title" class="settings-group-title"><span class="settings-group-index">01</span> Welt & Grafik</h3>
+            <div class="settings-group-controls">
+              <label class="setting-control">
+                <span class="setting-title-row"><span>Renderdistanz</span><span id="setting-render-distance-value" class="val"></span></span>
+                <input id="setting-render-distance" type="range" min="2" max="10" step="1">
+                <span class="setting-help">Mehr Chunks zeigen mehr Welt, brauchen aber mehr Leistung.</span>
+              </label>
+              <label class="setting-control">
+                <span class="setting-title-row"><span>Sichtfeld (FOV)</span><span id="setting-fov-value" class="val"></span></span>
+                <input id="setting-fov" type="range" min="60" max="110" step="1">
+                <span class="setting-help">Bestimmt, wie weit der Blickwinkel ist.</span>
+              </label>
+              <label class="setting-control">
+                <span class="setting-title-row"><span>Tageslänge</span><span id="setting-day-length-value" class="val"></span></span>
+                <input id="setting-day-length" type="range" min="0" max="1800" step="60">
+                <span class="setting-help">Sekunden pro Spieltag; 0 schaltet den Zyklus aus.</span>
+              </label>
+              <label class="setting-control">
+                <span class="setting-title-row"><span>Partikel</span><span class="setting-tag">EFFEKTE</span></span>
+                <select id="setting-particles">
+                  <option value="high">Viele Partikel</option>
+                  <option value="low">Wenige Partikel</option>
+                </select>
+                <span class="setting-help">Weniger Effekte können auf Handys flüssiger laufen.</span>
+              </label>
+            </div>
+          </section>
+
+          <section class="settings-group" aria-labelledby="settings-controls-title">
+            <h3 id="settings-controls-title" class="settings-group-title"><span class="settings-group-index">02</span> Steuerung</h3>
+            <div class="settings-group-controls">
+              <label class="setting-control">
+                <span class="setting-title-row"><span>Maus-/Blickempfindlichkeit</span><span id="setting-sensitivity-value" class="val"></span></span>
+                <input id="setting-sensitivity" type="range" min="0.0008" max="0.009" step="0.0002">
+                <span class="setting-help">Gilt für Maus und Blickwischen am Handy.</span>
+              </label>
+              <label class="setting-toggle">
+                <input id="setting-invert-y" type="checkbox">
+                <span class="setting-toggle-copy"><strong>Y-Achse invertieren</strong><small>Nach oben ziehen blickt nach unten.</small></span>
+              </label>
+            </div>
+          </section>
+
+          <section class="settings-group settings-group-wide" aria-labelledby="settings-game-title">
+            <h3 id="settings-game-title" class="settings-group-title"><span class="settings-group-index">03</span> Spiel & Ton</h3>
+            <div class="settings-group-controls">
+              <label class="setting-control">
+                <span class="setting-title-row"><span>Lautstärke</span><span id="setting-volume-value" class="val"></span></span>
+                <input id="setting-volume" type="range" min="0" max="1" step="0.05">
+                <span class="setting-help">Lautstärke der Spielgeräusche.</span>
+              </label>
+              <label class="setting-toggle">
+                <input id="setting-debug" type="checkbox">
+                <span class="setting-toggle-copy"><strong>Debug-Infos</strong><small>Zusätzliche Daten mit F3 anzeigen.</small></span>
+              </label>
+              <label class="setting-toggle">
+                <input id="setting-autosave" type="checkbox" checked>
+                <span class="setting-toggle-copy"><strong>Automatisch speichern</strong><small>Spielstand regelmäßig sichern.</small></span>
+              </label>
+            </div>
+          </section>
         </div>
-        <div class="menu-buttons-col">
+
+        <div class="settings-actions">
           <button id="btn-settings-back" class="menu-btn primary">← Zurück</button>
-          <button id="btn-reset-world" class="menu-btn danger">⚠ Welt zurücksetzen (neu generieren)</button>
-          <button id="btn-delete-save" class="menu-btn danger">🗑 Gespeicherte Welt löschen</button>
+          <button id="btn-reset-world" class="menu-btn danger">⚠ Welt zurücksetzen</button>
+          <button id="btn-delete-save" class="menu-btn danger">🗑 Spielstand löschen</button>
         </div>
       </div>
     </div>

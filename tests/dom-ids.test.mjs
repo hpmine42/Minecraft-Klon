@@ -85,6 +85,29 @@ for (const id of settingIds) {
   }
 }
 
+// Slider-Werte müssen direkt neben ihrer Beschriftung stehen, nicht als lose Flex-Elemente darunter.
+const settingsValueIds = [
+  'setting-render-distance-value', 'setting-fov-value', 'setting-sensitivity-value',
+  'setting-volume-value', 'setting-day-length-value',
+];
+for (const id of settingsValueIds) {
+  const valuePosition = html.indexOf(`id="${id}"`);
+  const labelStart = html.lastIndexOf('<label class="setting-control">', valuePosition);
+  const labelEnd = html.indexOf('</label>', valuePosition);
+  const controlMarkup = labelStart >= 0 && labelEnd > valuePosition
+    ? html.slice(labelStart, labelEnd)
+    : '';
+  if (!controlMarkup.includes('class="setting-title-row"')) {
+    console.error(`✘ Wert #${id} ist nicht mit seiner Einstellungsbeschriftung gruppiert`);
+    failed++;
+  }
+}
+const settingsMarkup = html.slice(html.indexOf('<div id="settings-screen"'), html.indexOf('<!-- Inventar -->'));
+if ((settingsMarkup.match(/class="settings-group(?: settings-group-wide)?"/g) || []).length !== 3) {
+  console.error('✘ Einstellungen sind nicht in drei lesbare Gruppen gegliedert');
+  failed++;
+}
+
 if (failed === 0) {
   console.log(`✔ Alle ${htmlIds.size} HTML-IDs vorhanden, ${new Set([...usedIds, ...mappedIds]).size} verwendete IDs gedeckt`);
 } else {
