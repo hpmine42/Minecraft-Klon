@@ -9,8 +9,10 @@ import { World, SEA_LEVEL } from './world/world.js';
 import { BLOCKS, BLOCK, getName, TOOL, isPlaceable } from './world/blocks.js';
 import { Player, PHYS } from './player/player.js';
 import { Inventory, matchRecipe, HOTBAR_SIZE } from './player/inventory.js';
+import { createFurnaceState, serializeFurnaceState, tickFurnace } from './player/furnace.js';
+import { createChestState, serializeChestState } from './player/containers.js';
 import { Interaction } from './player/interaction.js';
-import { MobManager } from './entities/mobs.js';
+import { MobManager, ItemEntity } from './entities/mobs.js';
 import { ParticleSystem } from './entities/particles.js';
 import { HUD } from './ui/hud.js';
 import { BlockOutline } from './ui/block-outline.js';
@@ -36,6 +38,7 @@ class Game {
     this.weatherTimer = 90 + Math.random() * 180;
     this.rainStrength = 0;
     this.autosaveTimer = 0;
+    this.furnaceSaveTimer = 0;
     this.lastFrame = 0;
     this.doubleJumpTimer = -Infinity;
     this.stats = { blocksPlaced: 0, blocksMined: 0, mobsKilled: 0, itemsPicked: 0, distance: 0 };
@@ -117,6 +120,7 @@ class Game {
       'loading-screen': $('loading-screen'),
       'selftest-screen': $('selftest-screen'),
       'inventory-body': $('inventory-body'),
+      'inventory-title': $('inventory-title'),
       'btn-close-inventory': $('btn-close-inventory'),
       'loading-text': $('loading-text'),
       'death-stats': $('death-stats'),
@@ -159,8 +163,9 @@ class Game {
       onResetWorld: () => { deleteSave(); this.startNewWorld(); },
       onDeleteSave: () => { deleteSave(); this.menus.setHasSave(false); this.toast('Spielstand gelöscht'); },
       onCloseInventory: () => this.closeInventory(),
+      onContainerChange: () => this.saveNow(),
       onCraft: () => this.audio.craft(),
-      onDropStack: (id, count) => this._dropItems(id, count),
+      onDropStack: (id, count, stack) => this._dropItems(id, count, stack),
       onSelfTest: () => this.runSelfTest(),
       onFullscreen: () => this.toggleFullscreen(),
     });
@@ -190,7 +195,7 @@ class Game {
 
     // Sichtbarkeitswechsel → Auto-Speichern / Pause
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.state === 'playing') {
+      if (document.hidden && (this.state === 'playing' || this.state === 'inventory')) {
         this.saveNow();
       }
     });
@@ -298,13 +303,17 @@ class Game {
       this.weatherTimer = 90 + Math.random() * 180;
 
       // Start-Ausrüstung
-      this.inventory.slots.fill(null);
+      this.inventory.fromJSON({ selected: 0, slots: [], equipment: {} });
+      this.menus.resetInventoryState();
       if (gamemode === 'creative') {
         const kit = [
           BLOCK.GRASS, BLOCK.STONE, BLOCK.COBBLESTONE, BLOCK.PLANKS, BLOCK.LOG,
           BLOCK.GLASS, BLOCK.TORCH, BLOCK.DIAMOND_PICKAXE, BLOCK.DIAMOND_SWORD,
         ];
-        kit.forEach((id, i) => { this.inventory.slots[i] = { id, count: 64, dur: BLOCKS[id]?.durability || null }; });
+        kit.forEach((id, i) => {
+          const max = Math.max(1, Number(BLOCKS[id]?.maxStack) || 64);
+          this.inventory.setSlot(i, { id, count: Math.min(64, max), dur: BLOCKS[id]?.durability || null });
+        });
       } else {
         this.inventory.slots[0] = { id: BLOCK.WOOD_SWORD, count: 1, dur: 60 };
         this.inventory.slots[1] = { id: BLOCK.BREAD, count: 3, dur: null };
@@ -332,10 +341,11 @@ class Game {
     this.menus.setLoading('Spielstand wird geladen…');
     this.state = 'loading';
     setTimeout(() => {
-      this._initWorld(data.seed, data.worldType || 'normal');
+      this._initWorld(data.seed, data.worldType || 'normal', data);
       this.player.world = this.world;
       this.player.fromJSON(data.player);
       this.inventory.fromJSON(data.inventory);
+      this.menus.restoreInventoryState(data.inventoryUI);
       this.timeOfDay = data.timeOfDay ?? 0.22;
       this.weather = data.weather || 'clear';
       this.weatherTimer = data.weatherTimer ?? 120;
@@ -360,7 +370,7 @@ class Game {
     }, 60);
   }
 
-  _initWorld(seed, worldType) {
+  _initWorld(seed, worldType, savedData = null) {
     // Alte Welt aufräumen
     if (this.world) {
       for (const chunk of this.world.chunks.values()) {
@@ -371,18 +381,58 @@ class Game {
     if (this.particles) this.particles.clear();
 
     this.world = new World(seed, worldType, this.materials);
-    // Gespeicherte Änderungen laden (werden bei Generierung angewendet)
-    const saved = loadGame();
-    if (saved && saved.seed === seed && Array.isArray(saved.modified)) {
-      for (const entry of saved.modified) {
-        const [x, y, z] = entry.pos.split(',').map(Number);
-        this.world.modified.set(entry.pos, { id: entry.id, meta: entry.meta || 0 });
+    // Nur beim Fortsetzen werden Weltänderungen und Containerzustände restauriert.
+    if (savedData && savedData.seed === seed) {
+      if (Array.isArray(savedData.modified)) {
+        for (const entry of savedData.modified) {
+          if (typeof entry?.pos !== 'string') continue;
+          this.world.modified.set(entry.pos, { id: entry.id, meta: entry.meta || 0 });
+        }
+      }
+      if (Array.isArray(savedData.furnaces)) {
+        for (const entry of savedData.furnaces) {
+          const [pos, state] = Array.isArray(entry) ? entry : [];
+          if (typeof pos === 'string' && /^-?\d+,-?\d+,-?\d+$/.test(pos)) {
+            this.world.furnaces.set(pos, createFurnaceState(state));
+          }
+        }
+      }
+      if (Array.isArray(savedData.chests)) {
+        for (const entry of savedData.chests) {
+          const [pos, state] = Array.isArray(entry) ? entry : [];
+          if (typeof pos === 'string' && /^-?\d+,-?\d+,-?\d+$/.test(pos)) {
+            this.world.chests.set(pos, createChestState(state));
+          }
+        }
       }
     }
 
     this.mobs = new MobManager(this.engine.scene, this.world);
+    if (savedData && Array.isArray(savedData.droppedItems)) {
+      for (const savedItem of savedData.droppedItems) {
+        const p = savedItem?.position;
+        if (!BLOCKS[savedItem?.id] || !Number.isFinite(savedItem.count) || savedItem.count <= 0
+            || !p || ![p.x, p.y, p.z].every(Number.isFinite)) continue;
+        const item = new ItemEntity(this.world, p.x, p.y, p.z, savedItem.id, savedItem.count, {
+          dur: savedItem.dur,
+          meta: savedItem.meta,
+        });
+        if (savedItem.velocity) {
+          item.velocity = {
+            x: Number(savedItem.velocity.x) || 0,
+            y: Number(savedItem.velocity.y) || 0,
+            z: Number(savedItem.velocity.z) || 0,
+          };
+        }
+        item.life = Number.isFinite(savedItem.life) ? savedItem.life : 300;
+        item.pickupDelay = Number.isFinite(savedItem.pickupDelay) ? savedItem.pickupDelay : 0.5;
+        this.mobs.items.push(item);
+        this.engine.scene.add(item.group);
+      }
+    }
     this.particles = new ParticleSystem(this.engine.scene);
     this.interaction = new Interaction(this.world, this.player, this.inventory, this.mobs, this.particles, this.audio);
+    this.interaction.onBlockBreak = (x, y, z, id) => this._onContainerBlockBreak(x, y, z, id);
   }
 
   saveNow() {
@@ -392,6 +442,19 @@ class Game {
       weather: this.weather,
       weatherTimer: this.weatherTimer,
       stats: this.stats,
+      furnaces: [...this.world.furnaces.entries()].map(([pos, state]) => [pos, serializeFurnaceState(state)]),
+      chests: [...this.world.chests.entries()].map(([pos, state]) => [pos, serializeChestState(state)]),
+      inventoryUI: this.menus.serializeInventoryState(),
+      droppedItems: (this.mobs?.items || []).map((item) => ({
+        id: item.itemId,
+        count: item.count,
+        position: { ...item.position },
+        velocity: { ...item.velocity },
+        life: item.life,
+        pickupDelay: item.pickupDelay,
+        dur: item.dur ?? null,
+        meta: item.meta ?? null,
+      })),
     });
     if (ok) this.menus.setHasSave(true);
     return ok;
@@ -488,17 +551,93 @@ class Game {
     if (this.state !== 'playing') return;
     this.state = 'inventory';
     if (this.input.locked) this.input.unlock();
-    this.menus.showScreen('inventory-screen');
+    this.menus.openPlayerInventory();
+  }
+
+  openWorkbenchInventory() {
+    if (this.state !== 'playing') return;
+    this.state = 'inventory';
+    if (this.input.locked) this.input.unlock();
+    this.menus.openWorkbenchInventory();
+  }
+
+  openFurnace(hit) {
+    if (this.state !== 'playing' || !hit) return;
+    const key = `${hit.x},${hit.y},${hit.z}`;
+    let state = this.world.furnaces.get(key);
+    if (!state) {
+      state = createFurnaceState();
+      this.world.furnaces.set(key, state);
+    }
+    this.state = 'inventory';
+    if (this.input.locked) this.input.unlock();
+    this.menus.openFurnace(state);
+  }
+
+  openChest(hit) {
+    if (this.state !== 'playing' || !hit) return;
+    const key = `${hit.x},${hit.y},${hit.z}`;
+    let state = this.world.chests.get(key);
+    if (!state) {
+      state = createChestState();
+      this.world.chests.set(key, state);
+    }
+    this.state = 'inventory';
+    if (this.input.locked) this.input.unlock();
+    this.menus.openChest(state);
   }
 
   closeInventory() {
     if (this.state !== 'inventory') return;
+    this.menus.closeActiveInventory();
+    this.saveNow();
     this.state = 'playing';
     this.menus.hideAll();
     if (!this.isTouch) this.input.lock();
     // Hotbar-Update erzwingen
     this.hud.update(0, this.player);
     this.hud._lastSig = null;
+  }
+
+  _onContainerBlockBreak(x, y, z, id) {
+    const key = `${x},${y},${z}`;
+    const contents = id === BLOCK.FURNACE
+      ? this.world.furnaces.get(key)
+      : id === BLOCK.CHEST
+        ? this.world.chests.get(key)
+        : null;
+    if (!contents) return;
+
+    if (this.player.gamemode !== 'creative') {
+      const drops = contents.slots.filter((stack) => stack && stack.count > 0)
+        .map((stack) => ({ id: stack.id, count: stack.count }));
+      this.mobs.spawnDrops(x, y, z, drops);
+    }
+    if (id === BLOCK.FURNACE) this.world.furnaces.delete(key);
+    if (id === BLOCK.CHEST) this.world.chests.delete(key);
+  }
+
+  _tickFurnaces(dt) {
+    if (!this.world?.furnaces?.size) {
+      this.furnaceSaveTimer = 0;
+      return;
+    }
+    let active = false;
+    for (const state of this.world.furnaces.values()) {
+      if (state.burnRemaining > 0 || state.progress > 0) active = true;
+      const slotsChanged = tickFurnace(state, dt);
+      this.menus?.refreshFurnaceUI(state);
+      if (slotsChanged) this.saveNow();
+    }
+    if (active) {
+      this.furnaceSaveTimer += dt;
+      if (this.furnaceSaveTimer >= 10) {
+        this.furnaceSaveTimer = 0;
+        this.saveNow();
+      }
+    } else {
+      this.furnaceSaveTimer = 0;
+    }
   }
 
   async runSelfTest() {
@@ -707,8 +846,13 @@ class Game {
       this.engine.updateFov(false, dt);
       this.engine.render();
     } else if (this.state === 'playing' || this.state === 'inventory' || this.state === 'paused' || this.state === 'dead') {
-      if (this.state === 'playing') {
+      if (this.state === 'playing' || this.state === 'inventory') {
+        // Die Welt läuft weiter, während das Inventar offen ist; Gameplay-Inputs
+        // werden im Update neutralisiert, die Physik, Mobs und Welt-Ticks nicht.
         this._updatePlaying(dt);
+      }
+      if (this.state === 'playing' || this.state === 'inventory') {
+        this._tickFurnaces(dt);
       }
       // Rendering auch im Pause-Menü (Hintergrund bleibt sichtbar)
       this.engine.updateSky(this.timeOfDay, this.settings.renderDistance, dt, this.rainStrength);
@@ -719,14 +863,26 @@ class Game {
 
   _updatePlaying(dt) {
     const player = this.player;
+    const inventoryOpen = this.state === 'inventory';
 
-    // ---- Eingaben ---------------------------------------------------------
+    // Das Inventar sperrt Steuer- und Interaktionseingaben, aber nicht den Welttick.
     let moveInput;
     let lookDX = 0;
     let lookDY = 0;
     let pressed;
 
-    if (this.isTouch && this.touch) {
+    if (inventoryOpen) {
+      moveInput = { forward: 0, right: 0, jump: false, sneak: false, sprint: false };
+      pressed = { use: false, attack: false, pick: false };
+      if (this.isTouch && this.touch) {
+        this.touch.consumeLook();
+        this.touch.consumePressed();
+      } else if (this.input) {
+        this.input.consumeMouse();
+        this.input.consumePressed();
+        this.input.consumeWheel();
+      }
+    } else if (this.isTouch && this.touch) {
       moveInput = this.touch.movement();
       const look = this.touch.consumeLook();
       lookDX = look.x;
@@ -818,23 +974,29 @@ class Game {
     this._cropTick(dt);
 
     // ---- Interaktion --------------------------------------------------------
-    let usePressed = pressed.use || false;
-    // Werkbank/Truhe anklicken öffnet das Inventar
+    let usePressed = !inventoryOpen && (pressed.use || false);
+    // Funktionsblöcke öffnen ihre eigene, positionsgebundene Oberfläche.
     if (usePressed) {
       const hit = this.world.raycast(player.eyePosition(), player.lookDir(), 5.2);
-      if (hit && (hit.id === BLOCK.CRAFTING_TABLE || hit.id === BLOCK.CHEST || hit.id === BLOCK.FURNACE)) {
-        this.openInventory();
+      if (hit?.id === BLOCK.CRAFTING_TABLE) {
+        this.openWorkbenchInventory();
+        usePressed = false;
+      } else if (hit?.id === BLOCK.FURNACE) {
+        this.openFurnace(hit);
+        usePressed = false;
+      } else if (hit?.id === BLOCK.CHEST) {
+        this.openChest(hit);
         usePressed = false;
       }
     }
 
-    const minePoint = this.isTouch ? this.touch.minePoint() : null;
+    const minePoint = this.isTouch && !inventoryOpen ? this.touch.minePoint() : null;
     const attackDirection = minePoint
       ? screenRayDirection(player, minePoint, window.innerWidth, window.innerHeight, this.engine.camera.fov)
       : null;
-    const attackHeld = this.isTouch
+    const attackHeld = !inventoryOpen && (this.isTouch
       ? (this.touch.attack || pressed.attack || !!attackDirection)
-      : this.input.attack;
+      : this.input.attack);
 
     const interactionResult = this.interaction.update(dt, {
       attack: attackHeld,
@@ -867,6 +1029,7 @@ class Game {
         this.audio.pickup();
         this.hud.showItemName(`+${count} ${getName(id)}`);
         this.stats.itemsPicked += count;
+        if (this.state === 'inventory') this.menus.refreshInventory();
       },
       onMobBurn: (mob) => {
         if (Math.random() < dt * 10) {
@@ -939,7 +1102,11 @@ class Game {
     });
 
     // ---- Tod -----------------------------------------------------------------
-    if (player.dead && this.state === 'playing') {
+    if (player.dead && (this.state === 'playing' || this.state === 'inventory')) {
+      if (this.state === 'inventory') {
+        this.menus.closeActiveInventory();
+        this.menus.hideAll();
+      }
       this.state = 'dead';
       if (this.input.locked) this.input.unlock();
       const mins = Math.floor(this.stats.distance / 60);
@@ -979,13 +1146,15 @@ class Game {
     }
   }
 
-  _dropItems(id, count) {
-    // ItemEntities vor dem Spieler spawnen (wenn Inventar voll ist)
+  _dropItems(id, count, stack = null) {
+    // Nicht passende Cursor-/Crafting-Reste bleiben als ItemEntity in der Welt.
     if (!this.mobs) return;
     const p = this.player.position;
     const dir = this.player.lookDir();
-    // Import hier vermeiden – ItemEntity wird über mobs.spawnDrops genutzt
-    this.mobs.spawnDrops(p.x + dir.x, p.y + 0.5, p.z + dir.z, [{ id, count }]);
+    const drop = { id, count };
+    if (stack?.dur != null) drop.dur = stack.dur;
+    if (stack?.meta != null) drop.meta = stack.meta;
+    this.mobs.spawnDrops(p.x + dir.x, p.y + 0.5, p.z + dir.z, [drop]);
   }
 
   toast(text) {

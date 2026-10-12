@@ -87,6 +87,8 @@ const modules = [
   '../src/entities/particles.js',
   '../src/entities/mobs.js',
   '../src/player/inventory.js',
+  '../src/player/furnace.js',
+  '../src/player/containers.js',
   '../src/player/player.js',
   '../src/player/interaction.js',
   '../src/core/audio.js',

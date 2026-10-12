@@ -592,6 +592,12 @@ export function generateAtlasData(seed = 1337) {
     p.set(7, 6, 70, 70, 74); p.set(9, 8, 70, 70, 74);
     p.rect(4, 7, 1, 2, 30, 30, 32); p.rect(11, 6, 1, 3, 30, 30, 32);
   });
+  itemIcon(101, (p) => { // Holzkohle
+    p.rect(5, 4, 6, 8, 48, 34, 25);
+    p.rect(6, 5, 4, 6, 88, 56, 34);
+    p.set(7, 6, 150, 90, 48); p.set(9, 9, 128, 72, 38);
+    p.set(5, 7, 38, 30, 26); p.set(11, 8, 38, 30, 26);
+  });
   itemIcon(59, (p) => { // Eisenbarren
     p.rect(3, 8, 10, 4, 216, 216, 220);
     p.rect(4, 6, 8, 2, 235, 235, 238);

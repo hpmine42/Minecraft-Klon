@@ -46,7 +46,11 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 - 🐷 **Tiere**: Schwein, Kuh, Schaf, Huhn – wandern, fliehen, liefern Fleisch/Leder/Wolle
 - 🧟 **Nachts Zombies** – sie jagen, greifen an und verbrennen im Sonnenlicht
 - 🍖 **Hunger & Gesundheit**: Essen, Verhungern, Regeneration, Fallschaden, Ertrinken
-- 🎒 **Inventar** (36 Slots + Hotbar) mit Stapeln, Haltbarkeit und Touch-Bedienung
+- 🎒 **Spielerinventar** mit 27 Hauptslots, gemeinsamer 9er-Hotbar, 2×2-Crafting, Ausrüstung/Nebenhand und Charaktervorschau; Tooltips, Links-/Rechtsklick, Drag-Verteilung, Shift-Klick und Touch-Bedienung
+- 🪚 **Werkbank-Crafting** mit dem klassischen 3×3-Raster; Zutaten und nicht abgeholte Ergebnisse gehen beim Schließen sicher zurück
+- 🔥 **Funktionierender Ofen** mit Ein-/Brennstoff-/Ausgabe-Slots, Schmelzbalken, gespeicherten Fortschritten und Rezepten für Erze, Sand, Lehm, Holz und Fleisch
+- 📦 **Truhen** mit 27 weltgebundenen Slots; Inhalte bleiben nach Speichern und Laden erhalten
+- 🪵 **Holzkohle** aus Holz – als lang brennender Brennstoff und für Fackeln verwendbar
 - 🔨 **Crafting**: 35+ Rezepte (Werkzeuge, Fackeln, Werkbank, Ofen, Brot, Leiter …) mit Rezeptbuch
 - 🏗️ **Kreativmodus**: Fliegen, freies Bauen, Start-Ausrüstung
 - 🌙 **Friedlich-Modus** ohne Monster (Standard)
@@ -81,11 +85,14 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 | Strg / R | Sprinten |
 | Shift | Schleichen / tiefer fliegen |
 | Linke Maustaste | Abbauen / angreifen (halten) |
-| Rechte Maustaste | Platzieren / benutzen / essen |
+| Rechte Maustaste | Platzieren / benutzen / essen; Ofen oder Truhe öffnen |
 | Mittlere Maustaste | Block kopieren (Kreativ) |
 | Mausrad, 1–9 | Schnellleiste |
-| E | Inventar & Crafting |
-| Esc | Pause |
+| E | Inventar & Crafting (Spieler 2×2, Werkbank 3×3) |
+| Linksklick im Inventar | Stapel aufnehmen/ablegen; Ziehen verteilt gleichmäßig |
+| Rechtsklick im Inventar | Hälfte aufnehmen, ein Item ablegen; Ziehen verteilt einzeln |
+| Shift-Klick im Inventar | Stapel zwischen Hotbar und Hauptinventar verschieben |
+| Esc | Pause bzw. Inventar schließen |
 | F | Fliegen umschalten |
 | F3 | Debug-Infos |
 | M / P | Spielmodus / Friedlich wechseln |
@@ -102,7 +109,7 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 | ⬇ | Schleichen (Umschalter) |
 | 🕊 | Fliegen an/aus |
 | ⛏ (halten) | Block abbauen / Mob angreifen |
-| ▣ | Block platzieren / Item benutzen |
+| ▣ | Block platzieren / benutzen; Ofen oder Truhe öffnen |
 | 🎒 | Inventar & Crafting |
 | ⚙ | Pause / Menü |
 | Hotbar antippen | Item wählen |
@@ -113,7 +120,7 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 npm test
 ```
 
-Enthalten (294 Prüfungen, komplett ohne Browser lauffähig):
+Enthalten (über 400 automatisierte Prüfungen, komplett ohne Browser lauffähig):
 - **Welttests**: Noise, Blöcke, Drops, Atlas, Terrain, Licht, Raycast, Biome, Meshes
 - **Spieltests**: Inventar, Crafting-Rezepte, Physik (Laufen, Springen, Kollision,
   Fallschaden, Schwimmen), Hunger, Kämpfe, Serialisierung, Speicherstände

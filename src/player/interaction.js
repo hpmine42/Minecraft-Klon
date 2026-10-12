@@ -27,6 +27,7 @@ export class Interaction {
     this.mobs = mobs;
     this.particles = particles;
     this.audio = audio;
+    this.onBlockBreak = null;
 
     this.breakTarget = null;   // {x,y,z,id,progress,required}
     this.breakProgress = 0;
@@ -138,11 +139,13 @@ export class Interaction {
     }
 
     const held = this.inventory.held();
-    const speed = breakSpeed(id, held ? held.id : null);
+    const creative = this.player.gamemode === 'creative';
+    const speed = creative ? 1 : breakSpeed(id, held ? held.id : null);
     if (speed <= 0) return;
 
-    this.breakProgress += dt * speed;
     const required = 1;
+    if (creative) this.breakProgress = required;
+    else this.breakProgress += dt * speed;
 
     // Abbau-Partikel
     if (Math.random() < dt * 18) {
@@ -150,7 +153,8 @@ export class Interaction {
     }
 
     if (this.breakProgress >= required) {
-      // Block abbauen
+      // Block abbauen; Funktionsblöcke können vorher ihre Inhalte droppen.
+      this.onBlockBreak?.(x, y, z, id);
       this.world.setBlock(x, y, z, BLOCK.AIR);
       this.particles.blockBreak(x, y, z, id, 14);
       this.audio.dig(soundMaterial(id));

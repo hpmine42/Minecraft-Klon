@@ -526,12 +526,14 @@ const ITEM_COLORS = {
 };
 
 export class ItemEntity extends Entity {
-  constructor(world, x, y, z, itemId, count = 1) {
+  constructor(world, x, y, z, itemId, count = 1, itemData = {}) {
     super(world, x, y, z);
     this.width = 0.25;
     this.height = 0.25;
     this.itemId = itemId;
     this.count = count;
+    this.dur = itemData.dur ?? null;
+    this.meta = itemData.meta ?? null;
     this.life = 300; // 5 Min
     this.pickupDelay = 0.5;
     this.bobPhase = Math.random() * Math.PI * 2;
@@ -574,7 +576,7 @@ export class ItemEntity extends Entity {
       if (dy > 0) this.velocity.y += Math.min(6, dy * 3) * dt * 4;
 
       if (dist < 0.9) {
-        const leftover = inventory.add(this.itemId, this.count);
+        const leftover = inventory.add(this.itemId, this.count, this.dur, this.meta);
         if (leftover < this.count) {
           if (hooks && hooks.onPickup) hooks.onPickup(this.itemId, this.count - leftover);
           this.count = leftover;
@@ -608,7 +610,7 @@ export class MobManager {
   spawnDrops(x, y, z, drops) {
     for (const d of drops) {
       if (!d || !d.count) continue;
-      const item = new ItemEntity(this.world, x + 0.5, y + 0.4, z + 0.5, d.id, d.count);
+      const item = new ItemEntity(this.world, x + 0.5, y + 0.4, z + 0.5, d.id, d.count, d);
       item.velocity.x = (Math.random() - 0.5) * 2.5;
       item.velocity.z = (Math.random() - 0.5) * 2.5;
       item.velocity.y = 2.8;

@@ -266,6 +266,8 @@ const targetBlock = {
   z: Math.floor(game.player.position.z) - 3,
 };
 game.world.setBlock(targetBlock.x, targetBlock.y, targetBlock.z, BLOCK.DIRT);
+// Survival bricht schrittweise ab; der folgende Test prüft deshalb auch die Riss-Kontur.
+game.player.gamemode = 'survival';
 const directRay = game.world.raycast(eye, game.player.lookDir(), 5.2);
 ok(directRay?.id === BLOCK.DIRT, 'Testblock liegt im Blickfeld');
 const raycastMob = game.mobs.raycastMob;
@@ -294,26 +296,39 @@ ok(mineFrames > 0, 'Mobile-Long-Press wird im Spiel als gehaltener Abbau verarbe
 ok(outlineShownWhileMining, 'Zielkontur bleibt beim mobilen Long-Press auf dem Block sichtbar');
 ok(game.world.getBlock(targetBlock.x, targetBlock.y, targetBlock.z) === BLOCK.AIR,
   'Gedrückthalten auf dem Block baut ihn direkt ab');
+game.player.gamemode = 'creative';
 
 // Inventar-Button öffnet Inventar
 const invBtn = elById('btn-inventory');
 invBtn.dispatch('touchstart', makeEvent([{ identifier: 7, clientX: 10, clientY: 10 }]));
 ok(game.state === 'inventory', 'Inventar-Button öffnet Inventar');
+ok(game.menus.craftingMode === 'player' && game.menus.craftGrid.length === 4
+  && game.menus.craftSlotEls[4].el.style.display === 'none',
+'Spielerinventar zeigt exakt vier 2×2-Crafting-Slots');
+let inventoryWorldTicks = 0;
+const playingUpdate = game._updatePlaying;
+game._updatePlaying = function (dt) {
+  if (this.state === 'inventory') inventoryWorldTicks++;
+  return playingUpdate.call(this, dt);
+};
+await new Promise((r) => setTimeout(r, 40));
+game._updatePlaying = playingUpdate;
+ok(inventoryWorldTicks > 0, 'Welt, Spielerphysik und Mobs laufen auch bei offenem Inventar weiter');
 ok(game.menus.transferControls.parentElement === game.menus.els['inventory-body']
   && game.menus.els['inventory-body'].children[0] === game.menus.transferControls,
 'Einzel-Item-Schalter sitzt sichtbar am Anfang des Inventars');
 
-// Item mit einem Finger aus dem Inventar direkt ins 3×3-Craftingfeld ziehen.
+// Item mit einem Finger aus dem Inventar direkt ins 2×2-Spielercraftingfeld ziehen.
 game.inventory.slots[9] = { id: BLOCK.LOG, count: 1, dur: null };
 game.menus.refreshInventory();
 const logSlot = game.menus.invSlotEls.find((slot) => slot.index === 9);
-const craftTarget = game.menus.craftSlotEls[4];
+const craftTarget = game.menus.craftSlotEls[0];
 logSlot.el.dispatch('pointerdown', makePointerEvent(20, 100, 300));
 ok(logSlot.el.capturedPointerId === 20, 'Mobile Crafting-Drag übernimmt den Pointer bis zum Loslassen');
 document._pointElement = craftTarget.canvas; // Browser elementFromPoint trifft meist das Slot-Icon.
 document.dispatch('pointermove', makePointerEvent(20, 180, 380));
 document.dispatch('pointerup', makePointerEvent(20, 180, 380));
-ok(game.inventory.slots[9] === null && game.menus.craftGrid[4]?.id === BLOCK.LOG && game.menus.heldStack === null,
+ok(game.inventory.slots[9] === null && game.menus.craftGrid[0]?.id === BLOCK.LOG && game.menus.heldStack === null,
   'Mobiles Drag-and-Drop verschiebt den Gegenstand ohne Duplikat ins Craftingfeld');
 ok(game.menus.resultSlotEl.stack?.id === BLOCK.PLANKS,
   'Crafting-Ergebnis wird nach dem mobilen Ablegen aktualisiert');
@@ -331,6 +346,7 @@ document.dispatch('pointerup', makePointerEvent(22, 150, 350));
 ok(game.menus.craftGrid[0]?.id === BLOCK.COBBLESTONE,
   'Inventar-Items lassen sich weiterhin per Antippen und erneutem Antippen ablegen');
 game.menus._returnCraftGrid();
+game.menus._dropHeld();
 
 // Einzeltransfer-Modus: Slot auswählen, dann pro Crafting-Tipp genau ein Item einlegen.
 game.inventory.slots[11] = { id: BLOCK.LOG, count: 2, dur: null };
@@ -343,16 +359,16 @@ transferSource.el.dispatch('pointerdown', makePointerEvent(31, 110, 300));
 document.dispatch('pointerup', makePointerEvent(31, 110, 300));
 ok(game.menus.transferSourceIndex === 11 && game.menus.heldStack === null,
   'Inventar-Slot wird ausgewählt, ohne den ganzen Stapel aufzunehmen');
-const transferTarget = game.menus.craftSlotEls[4];
+const transferTarget = game.menus.craftSlotEls[3];
 transferTarget.el.dispatch('pointerdown', makePointerEvent(32, 150, 350));
 document.dispatch('pointerup', makePointerEvent(32, 150, 350));
-ok(game.inventory.slots[11]?.count === 1 && game.menus.craftGrid[4]?.count === 1 && game.menus.heldStack === null,
+ok(game.inventory.slots[11]?.count === 1 && game.menus.craftGrid[3]?.count === 1 && game.menus.heldStack === null,
   'Erster Tipp legt genau ein Item ein und lässt den restlichen Stapel im Inventar');
 ok(game.menus.resultSlotEl.stack?.id === BLOCK.PLANKS,
   'Einzeltransfer aktualisiert sofort das Crafting-Ergebnis');
 transferTarget.el.dispatch('pointerdown', makePointerEvent(33, 150, 350));
 document.dispatch('pointerup', makePointerEvent(33, 150, 350));
-ok(game.inventory.slots[11] === null && game.menus.craftGrid[4]?.count === 2,
+ok(game.inventory.slots[11] === null && game.menus.craftGrid[3]?.count === 2,
   'Weiteres Tippen legt jeweils nur ein zusätzliches Item ein');
 transferButton.dispatch('touchend', makeEvent([{ identifier: 34, clientX: 20, clientY: 20 }]));
 ok(!game.menus.singleTransferMode, 'Einzeltransfer lässt sich wieder ausschalten');
@@ -367,9 +383,9 @@ plankTransferSource.el.dispatch('pointerdown', makePointerEvent(36, 110, 300));
 document.dispatch('pointerup', makePointerEvent(36, 110, 300));
 game.menus.craftSlotEls[0].el.dispatch('pointerdown', makePointerEvent(37, 150, 350));
 document.dispatch('pointerup', makePointerEvent(37, 150, 350));
-game.menus.craftSlotEls[3].el.dispatch('pointerdown', makePointerEvent(38, 150, 350));
+game.menus.craftSlotEls[2].el.dispatch('pointerdown', makePointerEvent(38, 150, 350));
 document.dispatch('pointerup', makePointerEvent(38, 150, 350));
-ok(game.inventory.slots[12] === null && game.menus.craftGrid[0]?.id === BLOCK.PLANKS && game.menus.craftGrid[3]?.id === BLOCK.PLANKS,
+ok(game.inventory.slots[12] === null && game.menus.craftGrid[0]?.id === BLOCK.PLANKS && game.menus.craftGrid[2]?.id === BLOCK.PLANKS,
   'Zwei einzelne Zutaten landen auf zwei Crafting-Feldern');
 ok(game.menus.resultSlotEl.stack?.id === BLOCK.STICK,
   'Einzeltransfer erlaubt auch mehrteilige Rezepte wie Stöcke');
@@ -379,6 +395,49 @@ game.menus._returnCraftGrid();
 document._pointElement = null;
 invBtn.dispatch('touchstart', makeEvent([{ identifier: 8, clientX: 10, clientY: 10 }]));
 ok(game.state === 'playing', 'Inventar-Button schließt Inventar');
+game.openWorkbenchInventory();
+ok(game.state === 'inventory' && game.menus.craftingMode === 'workbench'
+  && game.menus.craftGrid.length === 9 && game.menus.craftSlotEls[4].el.style.display !== 'none',
+'Werkbank-Inventar bietet weiterhin ein sichtbares 3×3-Craftingfeld');
+game.closeInventory();
+
+// Ofen und Truhe haben eigene, auch per Touch bedienbare Container-Slots.
+game.inventory.slots[13] = { id: BLOCK.BEEF, count: 2, dur: null };
+game.inventory.slots[14] = { id: BLOCK.COAL, count: 1, dur: null };
+game.openFurnace({ x: 1, y: 2, z: 3 });
+ok(game.state === 'inventory' && game.menus.inventoryTitle.textContent === 'Schmelzofen',
+  'Ofenblock öffnet eine eigene Schmelzoberfläche');
+const beefSlot = game.menus.invSlotEls.find((slot) => slot.index === 13);
+beefSlot.el.dispatch('pointerdown', makePointerEvent(40, 110, 300));
+document._pointElement = game.menus.furnaceSlotEls[0].canvas;
+document.dispatch('pointermove', makePointerEvent(40, 170, 360));
+document.dispatch('pointerup', makePointerEvent(40, 170, 360));
+game.menus._slotClick('inv', 14);
+game.menus._slotClick('container', 1);
+ok(game.world.furnaces.get('1,2,3').slots[0]?.id === BLOCK.BEEF
+  && game.world.furnaces.get('1,2,3').slots[1]?.id === BLOCK.COAL,
+'Rohstoff und Brennstoff lassen sich in den Ofen legen');
+game._tickFurnaces(5);
+ok(game.world.furnaces.get('1,2,3').slots[2]?.id === BLOCK.COOKED_BEEF
+  && game.world.furnaces.get('1,2,3').slots[0]?.count === 1,
+'Ofen schmilzt rohes Fleisch zu gegartem Fleisch');
+game.menus._slotClick('container', 2);
+game.menus._slotClick('inv', 15);
+game.closeInventory();
+
+game.openChest({ x: 4, y: 2, z: 3 });
+ok(game.state === 'inventory' && game.menus.inventoryTitle.textContent === 'Truhe',
+  'Truhe öffnet eine eigene Speicheroberfläche');
+game.menus._slotClick('inv', 15);
+game.menus._slotClick('container', 0);
+ok(game.world.chests.get('4,2,3').slots[0]?.id === BLOCK.COOKED_BEEF,
+  'Items können in der Truhe gelagert werden');
+game.closeInventory();
+game.openChest({ x: 4, y: 2, z: 3 });
+ok(game.world.chests.get('4,2,3').slots[0]?.id === BLOCK.COOKED_BEEF,
+  'Truheninhalt bleibt beim erneuten Öffnen erhalten');
+game.closeInventory();
+
 const craftBtn = elById('btn-craft');
 craftBtn.dispatch('touchstart', makeEvent([{ identifier: 25, clientX: 10, clientY: 10 }]));
 ok(game.state === 'inventory', 'Crafting-Schnellknopf öffnet das Inventar');
