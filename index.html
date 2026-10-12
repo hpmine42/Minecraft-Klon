@@ -73,43 +73,81 @@
 
     <!-- Hauptmenü -->
     <div id="main-menu" class="screen visible">
+      <div class="menu-backdrop" aria-hidden="true">
+        <span class="menu-pixel menu-pixel-one"></span>
+        <span class="menu-pixel menu-pixel-two"></span>
+        <span class="menu-pixel menu-pixel-three"></span>
+        <span class="menu-pixel menu-pixel-four"></span>
+      </div>
       <div class="menu-panel main-panel">
-        <h1 class="game-title">MINECRAFT<span>-KLON</span></h1>
-        <p class="subtitle">Voxel-Abenteuer für Computer & Handy</p>
+        <section class="main-menu-hero" aria-labelledby="main-menu-title">
+          <div class="menu-kicker"><span class="menu-kicker-dot"></span> DEIN VOXEL-ABENTEUER</div>
+          <h1 id="main-menu-title" class="game-title">MINECRAFT<span>KLON</span></h1>
+          <p class="subtitle">Eine lebendige Welt. Unendlich viele Möglichkeiten.</p>
+          <div class="hero-features" aria-label="Spielmerkmale">
+            <span><i class="feature-mark"></i> Welten zum Erkunden</span>
+            <span><i class="feature-mark"></i> Bauen & Craften</span>
+            <span><i class="feature-mark"></i> PC & Handy</span>
+          </div>
+          <div class="hero-note"><span aria-hidden="true">✦</span> Jeder Block ist der Anfang einer neuen Idee.</div>
+        </section>
 
-        <div class="menu-buttons-col">
-          <button id="btn-play" class="menu-btn primary">▸ Spiel fortsetzen</button>
+        <section class="main-menu-actions" aria-label="Spiel starten und Optionen">
+          <button id="btn-play" class="menu-btn primary play-menu-btn" aria-label="Spiel fortsetzen" disabled>
+            <span class="play-menu-icon" aria-hidden="true">▶</span>
+            <span class="play-menu-label">Spiel fortsetzen</span>
+            <span class="play-menu-arrow" aria-hidden="true">→</span>
+          </button>
 
           <div class="new-world-box">
-            <h3>Neue Welt</h3>
-            <label>Seed (leer = zufällig)
-              <input id="seed-input" type="text" placeholder="z. B. 12345 oder „Wald“" maxlength="32">
-            </label>
-            <label>Welttyp
-              <select id="world-type">
-                <option value="normal">Normal (Berge, Höhlen, Biome)</option>
-                <option value="flat">Flach (Bauwelt)</option>
-              </select>
-            </label>
-            <label>Spielmodus
-              <select id="game-mode">
-                <option value="survival">Überleben</option>
-                <option value="creative">Kreativ</option>
-              </select>
-            </label>
-            <label class="check-label">
-              <input id="peaceful-mode" type="checkbox" checked> Friedlich (keine Monster)
-            </label>
-            <button id="btn-new-world" class="menu-btn">✦ Neue Welt starten</button>
+            <div class="world-box-heading">
+              <div>
+                <span class="menu-eyebrow">ABENTEUER STARTEN</span>
+                <h3>Neue Welt</h3>
+              </div>
+              <span class="world-box-icon" aria-hidden="true">▦</span>
+            </div>
+            <p class="world-box-description">Lege deine Welt fest und mach sie zu deiner.</p>
+            <div class="world-field-grid">
+              <label><span class="field-label-title">Seed <span class="field-hint">(leer = zufällig)</span></span>
+                <input id="seed-input" type="text" placeholder="z. B. 12345 oder Wald" maxlength="32" autocomplete="off">
+              </label>
+              <label>Welttyp
+                <select id="world-type">
+                  <option value="normal">Normal · Berge & Höhlen</option>
+                  <option value="flat">Flach · Bauwelt</option>
+                </select>
+              </label>
+              <label>Spielmodus
+                <select id="game-mode">
+                  <option value="survival">Überleben</option>
+                  <option value="creative">Kreativ</option>
+                </select>
+              </label>
+              <label class="check-label">
+                <input id="peaceful-mode" type="checkbox" checked> Friedlich · keine Monster
+              </label>
+            </div>
+            <button id="btn-new-world" class="menu-btn new-world-button"><span aria-hidden="true">✦</span> Neue Welt starten</button>
           </div>
 
-          <button id="btn-open-settings" class="menu-btn">⚙ Einstellungen</button>
-          <button id="btn-help" class="menu-btn">? Steuerung & Hilfe</button>
-          <button id="btn-selftest" class="menu-btn">♥ Selbstdiagnose (auch fürs Handy)</button>
-          <button id="btn-fullscreen-menu" class="menu-btn" type="button" aria-pressed="false">⛶ Vollbildmodus aktivieren</button>
-        </div>
+          <div class="menu-utility-grid">
+            <button id="btn-open-settings" class="menu-btn utility-button">
+              <span class="utility-icon" aria-hidden="true">⚙</span><span><strong>Einstellungen</strong><small>Grafik & Audio</small></span>
+            </button>
+            <button id="btn-help" class="menu-btn utility-button">
+              <span class="utility-icon" aria-hidden="true">?</span><span><strong>Steuerung</strong><small>Hilfe & Tasten</small></span>
+            </button>
+            <button id="btn-selftest" class="menu-btn utility-button">
+              <span class="utility-icon" aria-hidden="true">♥</span><span><strong>Selbstdiagnose</strong><small>Gerät testen</small></span>
+            </button>
+            <button id="btn-fullscreen-menu" class="menu-btn utility-button" type="button" aria-pressed="false">
+              <span class="utility-icon" aria-hidden="true">⛶</span><span><strong>Vollbild</strong><small>Bildschirm füllen</small></span>
+            </button>
+          </div>
+        </section>
 
-        <p class="hint">Tipp: Öffne diese Seite einfach auf dem Handy – die Steuerung passt sich automatisch an.</p>
+        <p class="hint"><span aria-hidden="true">✦</span> Öffne das Spiel auf Handy oder Computer – die Steuerung passt sich automatisch an.</p>
       </div>
     </div>
 

@@ -34,6 +34,9 @@ export class Menus {
       if (el) el.classList.toggle('visible', s === name);
     }
     this.activeScreen = name;
+    // Der HUD-Vollbildknopf bleibt nur im Spiel sichtbar; über Screen-Karten würden sich Controls optisch überlagern.
+    const hudFullscreen = this.els['btn-fullscreen'];
+    if (hudFullscreen) hudFullscreen.style.display = name ? 'none' : '';
     if (leavingInventory) this._setSingleTransferMode(false);
     if (name === 'inventory-screen') {
       this.refreshInventory();
@@ -184,7 +187,13 @@ export class Menus {
     const btn = this.els['btn-play'];
     if (btn) {
       btn.disabled = !has;
-      btn.textContent = has ? '▸ Spiel fortsetzen' : '▸ Spiel fortsetzen (kein Spielstand)';
+      const label = btn.querySelector && btn.querySelector('.play-menu-label');
+      if (label && label.parentElement) {
+        label.textContent = has ? 'Spiel fortsetzen' : 'Noch kein Spielstand';
+        btn.setAttribute('aria-label', has ? 'Spiel fortsetzen' : 'Kein Spielstand vorhanden');
+      } else {
+        btn.textContent = has ? '▸ Spiel fortsetzen' : '▸ Spiel fortsetzen (kein Spielstand)';
+      }
     }
     const del = this.els['btn-delete-save'];
     if (del) del.style.display = has ? 'inline-block' : 'none';

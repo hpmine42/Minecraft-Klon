@@ -95,6 +95,7 @@ const modules = [
   '../src/core/engine.js',
   '../src/ui/hud.js',
   '../src/ui/block-outline.js',
+  '../src/ui/menu-preview.js',
   '../src/ui/menus.js',
   '../src/ui/debug.js',
   '../src/ui/selftest.js',
