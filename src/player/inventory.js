@@ -182,6 +182,7 @@ export const RECIPES = [
   shaped(['CCC', 'C C', 'CCC'], { C: BLOCK.COBBLESTONE }, { id: BLOCK.FURNACE, count: 1 }, 'Schmelzofen'),
   shaped(['PPP', 'P P', 'PPP'], { P }, { id: BLOCK.CHEST, count: 1 }, 'Truhe'),
   shaped(['C', 'S'], { C: BLOCK.COAL, S }, { id: BLOCK.TORCH, count: 4 }, 'Fackeln'),
+  shaped(['C', 'S'], { C: BLOCK.CHARCOAL, S }, { id: BLOCK.TORCH, count: 4 }, 'Holzkohle-Fackeln'),
   shaped(['C', 'S'], { C: BLOCK.REDSTONE, S }, { id: BLOCK.TORCH, count: 1 }, 'Redstone-Fackel'),
   shaped(['SSS', ' S ', ' S '], { S }, { id: BLOCK.LADDER, count: 3 }, 'Leiter'),
   shaped(['SS', 'SS'], { S: BLOCK.SAND }, { id: BLOCK.SANDSTONE, count: 1 }, 'Sandstein'),

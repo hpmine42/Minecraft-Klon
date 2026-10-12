@@ -87,6 +87,7 @@ export const BLOCK = {
   FEATHER: 243,
   BONE: 244,
   BONE_MEAL: 245,
+  CHARCOAL: 246,
   SUGAR_CANE: 250,
 };
 
@@ -326,6 +327,7 @@ function item(id, name, opts = {}) {
 
 item(BLOCK.STICK, 'Stock', { tiles: [57] });
 item(BLOCK.COAL, 'Kohle', { tiles: [58] });
+item(BLOCK.CHARCOAL, 'Holzkohle', { tiles: [101] });
 item(BLOCK.IRON_INGOT, 'Eisenbarren', { tiles: [59] });
 item(BLOCK.GOLD_INGOT, 'Goldbarren', { tiles: [60] });
 item(BLOCK.DIAMOND, 'Diamant', { tiles: [61] });

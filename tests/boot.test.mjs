@@ -1,6 +1,8 @@
 // boot.test.mjs — Startet main.js komplett mit DOM-Stubs (Boot-Smoke-Test).
 import { pathToFileURL } from 'node:url';
 import { BLOCK } from '../src/world/blocks.js';
+import { createFurnaceState } from '../src/player/furnace.js';
+import { createChestState } from '../src/player/containers.js';
 
 // ---- Browser-Stubs (wie modules.test, aber erweiterter) --------------------
 const ctxStub = () => new Proxy({}, {
@@ -268,7 +270,16 @@ ok(game.state === 'inventory', 'Inventar öffnet');
 game.closeInventory();
 ok(game.state === 'playing', 'Inventar schließt');
 
-// Speichern / Laden
+// Speichern / Laden inklusive positionierter Ofen- und Truheninhalte
+game.world.furnaces.set('10,20,30', createFurnaceState({
+  slots: [{ id: BLOCK.IRON_ORE, count: 2 }, { id: BLOCK.COAL, count: 1 }, null],
+  progress: 3.5,
+  burnRemaining: 40,
+  burnTotal: 80,
+}));
+game.world.chests.set('11,20,30', createChestState({
+  slots: [{ id: BLOCK.BREAD, count: 6 }, null],
+}));
 const saved = game.saveNow();
 ok(saved === true, 'Spiel speichern');
 ok(localStorage.getItem('minecraft-klon-save-v1') !== null, 'Spielstand im localStorage');
@@ -278,6 +289,11 @@ game.continueGame();
 await new Promise((r) => setTimeout(r, 500));
 ok(game.state === 'playing', 'Spiel fortgesetzt');
 ok(game.world.chunks.size > 0, `Welt nach Laden da (${game.world.chunks.size} Chunks)`);
+ok(game.world.furnaces.get('10,20,30')?.slots[0]?.count === 2
+  && game.world.furnaces.get('10,20,30')?.progress >= 3.5,
+'Ofeninhalt und Schmelzfortschritt werden gespeichert');
+ok(game.world.chests.get('11,20,30')?.slots[0]?.count === 6,
+'Truheninhalt wird gespeichert');
 
 // Tastatur: Strg sprintet ohne gleichzeitig zu schleichen, beide Strg-Tasten funktionieren.
 game.input.keys.clear();

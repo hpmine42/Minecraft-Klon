@@ -47,6 +47,9 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 - 🧟 **Nachts Zombies** – sie jagen, greifen an und verbrennen im Sonnenlicht
 - 🍖 **Hunger & Gesundheit**: Essen, Verhungern, Regeneration, Fallschaden, Ertrinken
 - 🎒 **Inventar** (36 Slots + Hotbar) mit Stapeln, Haltbarkeit und Touch-Bedienung
+- 🔥 **Funktionierender Ofen** mit Ein-/Brennstoff-/Ausgabe-Slots, Schmelzbalken, gespeicherten Fortschritten und Rezepten für Erze, Sand, Lehm, Holz und Fleisch
+- 📦 **Truhen** mit 27 weltgebundenen Slots; Inhalte bleiben nach Speichern und Laden erhalten
+- 🪵 **Holzkohle** aus Holz – als lang brennender Brennstoff und für Fackeln verwendbar
 - 🔨 **Crafting**: 35+ Rezepte (Werkzeuge, Fackeln, Werkbank, Ofen, Brot, Leiter …) mit Rezeptbuch
 - 🏗️ **Kreativmodus**: Fliegen, freies Bauen, Start-Ausrüstung
 - 🌙 **Friedlich-Modus** ohne Monster (Standard)
@@ -81,7 +84,7 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 | Strg / R | Sprinten |
 | Shift | Schleichen / tiefer fliegen |
 | Linke Maustaste | Abbauen / angreifen (halten) |
-| Rechte Maustaste | Platzieren / benutzen / essen |
+| Rechte Maustaste | Platzieren / benutzen / essen; Ofen oder Truhe öffnen |
 | Mittlere Maustaste | Block kopieren (Kreativ) |
 | Mausrad, 1–9 | Schnellleiste |
 | E | Inventar & Crafting |
@@ -102,7 +105,7 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 | ⬇ | Schleichen (Umschalter) |
 | 🕊 | Fliegen an/aus |
 | ⛏ (halten) | Block abbauen / Mob angreifen |
-| ▣ | Block platzieren / Item benutzen |
+| ▣ | Block platzieren / benutzen; Ofen oder Truhe öffnen |
 | 🎒 | Inventar & Crafting |
 | ⚙ | Pause / Menü |
 | Hotbar antippen | Item wählen |
@@ -113,7 +116,7 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 npm test
 ```
 
-Enthalten (294 Prüfungen, komplett ohne Browser lauffähig):
+Enthalten (über 400 automatisierte Prüfungen, komplett ohne Browser lauffähig):
 - **Welttests**: Noise, Blöcke, Drops, Atlas, Terrain, Licht, Raycast, Biome, Meshes
 - **Spieltests**: Inventar, Crafting-Rezepte, Physik (Laufen, Springen, Kollision,
   Fallschaden, Schwimmen), Hunger, Kämpfe, Serialisierung, Speicherstände

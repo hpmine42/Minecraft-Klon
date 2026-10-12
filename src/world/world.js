@@ -16,6 +16,9 @@ export class World {
     this.gen = new WorldGen(this.seed, worldType);
     this.chunks = new Map();
     this.modified = new Map();     // "x,y,z" -> {id, meta} — Spieler-Änderungen
+    // Container-Inhalte werden separat unter "x,y,z" gespeichert.
+    this.furnaces = new Map();
+    this.chests = new Map();
     this.materials = materials || {};
     this.meshQueue = [];
     this.chunksDirty = new Set();

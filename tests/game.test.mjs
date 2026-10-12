@@ -76,6 +76,8 @@ ok(matchRecipe(swordGrid)?.id === BLOCK.IRON_SWORD, 'Eisenschwert');
 // Fackeln (Kohle über Stock)
 const torchGrid = grid([null, BLOCK.COAL, null, null, BLOCK.STICK, null, null, null, null]);
 ok(matchRecipe(torchGrid)?.id === BLOCK.TORCH && matchRecipe(torchGrid)?.count === 4, 'Fackeln ×4');
+const charcoalTorchGrid = grid([null, BLOCK.CHARCOAL, null, null, BLOCK.STICK, null, null, null, null]);
+ok(matchRecipe(charcoalTorchGrid)?.id === BLOCK.TORCH && matchRecipe(charcoalTorchGrid)?.count === 4, 'Holzkohle kann Fackeln herstellen');
 // Brot
 const breadGrid = grid([BLOCK.WHEAT_ITEM, BLOCK.WHEAT_ITEM, BLOCK.WHEAT_ITEM, null, null, null, null, null, null]);
 ok(matchRecipe(breadGrid)?.id === BLOCK.BREAD, 'Brot aus 3 Weizen');

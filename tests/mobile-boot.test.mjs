@@ -379,6 +379,44 @@ game.menus._returnCraftGrid();
 document._pointElement = null;
 invBtn.dispatch('touchstart', makeEvent([{ identifier: 8, clientX: 10, clientY: 10 }]));
 ok(game.state === 'playing', 'Inventar-Button schließt Inventar');
+
+// Ofen und Truhe haben eigene, auch per Touch bedienbare Container-Slots.
+game.inventory.slots[13] = { id: BLOCK.BEEF, count: 2, dur: null };
+game.inventory.slots[14] = { id: BLOCK.COAL, count: 1, dur: null };
+game.openFurnace({ x: 1, y: 2, z: 3 });
+ok(game.state === 'inventory' && game.menus.inventoryTitle.textContent === 'Schmelzofen',
+  'Ofenblock öffnet eine eigene Schmelzoberfläche');
+const beefSlot = game.menus.invSlotEls.find((slot) => slot.index === 13);
+beefSlot.el.dispatch('pointerdown', makePointerEvent(40, 110, 300));
+document._pointElement = game.menus.furnaceSlotEls[0].canvas;
+document.dispatch('pointermove', makePointerEvent(40, 170, 360));
+document.dispatch('pointerup', makePointerEvent(40, 170, 360));
+game.menus._slotClick('inv', 14);
+game.menus._slotClick('container', 1);
+ok(game.world.furnaces.get('1,2,3').slots[0]?.id === BLOCK.BEEF
+  && game.world.furnaces.get('1,2,3').slots[1]?.id === BLOCK.COAL,
+'Rohstoff und Brennstoff lassen sich in den Ofen legen');
+game._tickFurnaces(5);
+ok(game.world.furnaces.get('1,2,3').slots[2]?.id === BLOCK.COOKED_BEEF
+  && game.world.furnaces.get('1,2,3').slots[0]?.count === 1,
+'Ofen schmilzt rohes Fleisch zu gegartem Fleisch');
+game.menus._slotClick('container', 2);
+game.menus._slotClick('inv', 15);
+game.closeInventory();
+
+game.openChest({ x: 4, y: 2, z: 3 });
+ok(game.state === 'inventory' && game.menus.inventoryTitle.textContent === 'Truhe',
+  'Truhe öffnet eine eigene Speicheroberfläche');
+game.menus._slotClick('inv', 15);
+game.menus._slotClick('container', 0);
+ok(game.world.chests.get('4,2,3').slots[0]?.id === BLOCK.COOKED_BEEF,
+  'Items können in der Truhe gelagert werden');
+game.closeInventory();
+game.openChest({ x: 4, y: 2, z: 3 });
+ok(game.world.chests.get('4,2,3').slots[0]?.id === BLOCK.COOKED_BEEF,
+  'Truheninhalt bleibt beim erneuten Öffnen erhalten');
+game.closeInventory();
+
 const craftBtn = elById('btn-craft');
 craftBtn.dispatch('touchstart', makeEvent([{ identifier: 25, clientX: 10, clientY: 10 }]));
 ok(game.state === 'inventory', 'Crafting-Schnellknopf öffnet das Inventar');

@@ -25,7 +25,7 @@ for (const id of [...new Set([...usedIds, ...mappedIds])]) {
 const expectedScreens = [
   'main-menu', 'pause-menu', 'settings-screen', 'inventory-screen',
   'death-screen', 'help-screen', 'loading-screen', 'selftest-screen',
-  'inventory-body', 'btn-close-inventory', 'loading-text', 'death-stats',
+  'inventory-body', 'inventory-title', 'btn-close-inventory', 'loading-text', 'death-stats',
   'help-content', 'selftest-results', 'btn-selftest-back',
 ];
 for (const id of expectedScreens) {

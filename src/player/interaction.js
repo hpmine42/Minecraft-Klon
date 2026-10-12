@@ -27,6 +27,7 @@ export class Interaction {
     this.mobs = mobs;
     this.particles = particles;
     this.audio = audio;
+    this.onBlockBreak = null;
 
     this.breakTarget = null;   // {x,y,z,id,progress,required}
     this.breakProgress = 0;
@@ -150,7 +151,8 @@ export class Interaction {
     }
 
     if (this.breakProgress >= required) {
-      // Block abbauen
+      // Block abbauen; Funktionsblöcke können vorher ihre Inhalte droppen.
+      this.onBlockBreak?.(x, y, z, id);
       this.world.setBlock(x, y, z, BLOCK.AIR);
       this.particles.blockBreak(x, y, z, id, 14);
       this.audio.dig(soundMaterial(id));

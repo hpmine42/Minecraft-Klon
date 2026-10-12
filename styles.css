@@ -912,6 +912,91 @@ html, body {
   gap: 10px;
   margin-bottom: 10px;
 }
+.furnace-panel, .chest-panel {
+  width: 100%;
+  margin-bottom: 10px;
+}
+.furnace-layout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 126px;
+  padding: 12px;
+  border: 1px solid rgba(255, 214, 110, 0.24);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(44, 37, 32, 0.86), rgba(18, 23, 30, 0.82));
+}
+.furnace-input-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.furnace-slot-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.furnace-slot-label {
+  color: #c8d8e8;
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.furnace-output .inv-slot { border-color: rgba(255, 214, 110, 0.58); }
+.furnace-meters {
+  display: flex;
+  flex: 1 1 100px;
+  max-width: 150px;
+  min-width: 72px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+}
+.furnace-meter {
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.48);
+}
+.furnace-meter-fill {
+  width: 0;
+  height: 100%;
+  transition: width 100ms linear;
+}
+.furnace-burn-fill { background: linear-gradient(90deg, #e47524, #ffd568); }
+.furnace-progress-fill { background: linear-gradient(90deg, #75bd4d, #b8ec73); }
+.furnace-cook-arrow {
+  color: #e7d8bd;
+  font-size: 23px;
+  line-height: 1;
+  text-align: center;
+}
+.furnace-status {
+  min-height: 20px;
+  margin-top: 8px;
+  color: #ffe29b;
+  font-size: 12px;
+  font-weight: 700;
+}
+.furnace-hint {
+  margin-top: 4px;
+  color: #a8c0d8;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.chest-grid {
+  width: 100%;
+  grid-template-columns: repeat(9, 52px);
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+}
 .craft-label {
   font-size: 13px;
   color: #a8c0d8;
@@ -1160,8 +1245,15 @@ html, body {
   .inv-header h2 { font-size: clamp(18px, 5vw, 24px); }
   .inv-header .small-btn { padding: 7px 8px; min-height: 40px; font-size: 12px; }
   #inventory-screen .menu-panel { touch-action: pan-y; overscroll-behavior: contain; }
-  #inventory-body, .inv-wrap, .craft-wrap { width: 100%; min-width: 0; }
+  #inventory-body, .inv-wrap, .craft-wrap, .furnace-panel, .chest-panel { width: 100%; min-width: 0; }
   .craft-area { gap: clamp(6px, 2vw, 12px); }
+  .furnace-layout { gap: clamp(6px, 2vw, 12px); padding: 10px 6px; }
+  .furnace-layout .inv-slot { width: clamp(40px, 13vw, 52px); height: auto; aspect-ratio: 1; }
+  .furnace-meters { min-width: clamp(54px, 18vw, 92px); }
+  .furnace-slot-label { font-size: 9px; }
+  .furnace-status { font-size: 11px; }
+  .furnace-hint { font-size: 10px; }
+  .chest-grid { grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 3px; padding: 6px; }
   .craft-grid {
     width: min(42vw, 172px);
     grid-template-columns: repeat(3, minmax(0, 1fr));
