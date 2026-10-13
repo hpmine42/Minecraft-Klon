@@ -213,6 +213,9 @@ ok(!game.menuPreview.root.visible, 'Menü-Diorama wird beim Weltstart ausgeblend
 await new Promise((r) => setTimeout(r, 500));
 ok(game.state === 'playing', `Zustand nach Start: ${game.state}`);
 ok(!!game.world && game.world.chunks.size > 0, `Welt generiert (${game.world ? game.world.chunks.size : 0} Chunks)`);
+ok(game.hud.els.worldStatus.style.display === 'block'
+  && game.hud.els.worldStatus.textContent.includes('Y '),
+'Erkundungs-HUD zeigt Biom, Weltzeit, Wetter und Höhe');
 game.hud.update(0, game.player, true);
 ok(game.hud.els.heldItemView.style.display === 'block'
   && game.hud.els.heldItemIcon.style.visibility === 'visible',
@@ -223,6 +226,19 @@ const lowParticleBudget = game.particles.maxParticles === 180;
 game.applySetting('particles', 'high');
 ok(lowParticleBudget && game.particles.maxParticles === 800,
   'Partikelqualität-Einstellung ändert das aktive Effektbudget und stellt es wieder her');
+game.applySetting('reduceMotion', true);
+const reducedMotionSaved = JSON.parse(localStorage.getItem('minecraft-klon-settings-v1'))?.reduceMotion === true;
+game.applySetting('reduceMotion', false);
+ok(reducedMotionSaved && game.settings.reduceMotion === false,
+'Kamerabewegung lässt sich reduzieren und die Einstellung wird gespeichert');
+let f1Prevented = false;
+game.input._onKeyDown({ code: 'F1', repeat: false, preventDefault() { f1Prevented = true; } });
+game._onKey({ code: 'F1', repeat: false, preventDefault() {} });
+const hudWasHidden = game.hud.hidden && game.hud.els.root.style.display === 'none';
+game._onKey({ code: 'F1', repeat: false, preventDefault() {} });
+game.input._onKeyUp({ code: 'F1' });
+ok(f1Prevented && hudWasHidden && !game.hud.hidden,
+'F1 blendet das HUD für Screenshots aus und ein, ohne den Browser-Hilferuf zu öffnen');
 ok(!!game.interaction, 'Interaktion vorhanden');
 ok(game.player.position.y > 0, `Spieler positioniert (y=${game.player.position.y.toFixed(1)})`);
 
@@ -253,6 +269,9 @@ ok(game.state === 'playing', 'Resume funktioniert');
     && Math.abs(game.blockOutline.mesh.position.y - visibleTarget.y - 0.5) < 0.001
     && Math.abs(game.blockOutline.mesh.position.z - visibleTarget.z - 0.5) < 0.001,
   'Zielkontur erscheint ohne Angriff am tatsächlich anvisierten Block');
+  ok(game.hud.els.targetHint.style.display === 'block'
+    && game.hud.els.targetHint.textContent.includes('abbauen'),
+  'Anvisierte Blöcke erhalten einen kontextuellen Bedienhinweis');
 
   // Kreativ: sofort im Test alles abbauen
   p.gamemode = 'creative';
@@ -384,7 +403,24 @@ game._onKey({ code: 'Space', repeat: true, preventDefault() {} });
 ok(game.player.flying && game.doubleJumpTimer === secondFlightTap, 'Key-Repeat deaktiviert den Flug nicht wieder');
 game._setFlying(false);
 
+game.pause();
 const goodSavedBytes = localStorage.getItem('minecraft-klon-save-v1');
+const originalSetItem = localStorage.setItem;
+const originalWarn = console.warn;
+localStorage.setItem = function (key, value) {
+  if (key === 'minecraft-klon-save-v1') throw new Error('quota');
+  return originalSetItem.call(this, key, value);
+};
+console.warn = () => {};
+game.menus.cb.onQuit();
+console.warn = originalWarn;
+localStorage.setItem = originalSetItem;
+ok(game.state === 'paused'
+  && localStorage.getItem('minecraft-klon-save-v1') === goodSavedBytes
+  && elementsById.get('save-feedback')?.textContent.includes('Speichern fehlgeschlagen'),
+'Bei fehlgeschlagenem Speichern bleibt die Welt offen, der Fehler ist sichtbar und der vorherige Spielstand erhalten');
+game.menus.cb.onQuit();
+ok(game.state === 'menu', 'Speichern & zum Hauptmenü verlässt die Welt nach erfolgreichem Speichern');
 const invalidSavedBytes = JSON.stringify({ version: 1, seed: 42 });
 localStorage.setItem('minecraft-klon-save-v1', invalidSavedBytes);
 game.state = 'menu';

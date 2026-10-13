@@ -51,7 +51,7 @@ for (const id of touchIds) {
 // HUD-Elemente
 const hudIds = [
   'game', 'hud', 'hotbar', 'hearts', 'hunger', 'air', 'item-name',
-  'break-progress', 'fps', 'btn-fullscreen', 'debug', 'hurt-overlay', 'water-overlay', 'mode-label',
+  'break-progress', 'target-hint', 'world-status', 'fps', 'btn-fullscreen', 'debug', 'hurt-overlay', 'water-overlay', 'mode-label',
 ];
 for (const id of hudIds) {
   if (!htmlIds.has(id)) {
@@ -75,7 +75,7 @@ if (!mainMenuMarkup.includes('id="btn-fullscreen-menu"')) {
 const settingIds = [
   'setting-render-distance', 'setting-fov', 'setting-sensitivity',
   'setting-volume', 'setting-day-length', 'setting-particles',
-  'setting-invert-y', 'setting-debug', 'setting-autosave',
+  'setting-invert-y', 'setting-reduced-motion', 'setting-debug', 'setting-autosave',
   'btn-reset-world', 'btn-delete-save', 'btn-settings-back',
 ];
 for (const id of settingIds) {

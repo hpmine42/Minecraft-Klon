@@ -262,6 +262,7 @@ export class Menus {
       });
     };
     bindCheck('setting-invert-y', 'invertY');
+    bindCheck('setting-reduced-motion', 'reduceMotion');
     bindCheck('setting-debug', 'showDebug');
     bindCheck('setting-autosave', 'autosave');
 
@@ -312,6 +313,7 @@ export class Menus {
     setSel('setting-particles', s.particles);
     const setChk = (id, v) => { const el = this._el(id); if (el) el.checked = !!v; };
     setChk('setting-invert-y', s.invertY);
+    setChk('setting-reduced-motion', s.reduceMotion);
     setChk('setting-debug', s.showDebug);
     setChk('setting-autosave', s.autosave !== false);
   }
@@ -1770,6 +1772,8 @@ export class Menus {
       </ul>
       <h3>Tipps</h3>
       <ul>
+        <li>Das HUD zeigt Biom, Weltzeit, Wetter und Höhe; beim Anvisieren erscheinen Blockhinweise.</li>
+        <li>Bei Bedarf Kopf-Bobbing und Sprint-Zoom in den Einstellungen abschalten.</li>
         <li>Auf dem Handy ist die Renderdistanz kleiner – in den Einstellungen erhöhbar.</li>
         <li>Im Kreativmodus kannst du fliegen und alle Blöcke platzieren.</li>
         <li>Nachts kommen Zombies – im Friedlich-Modus nicht!</li>
@@ -1790,7 +1794,8 @@ export class Menus {
         <li><b>Crafting:</b> Das Spielerraster ist 2×2, Werkbänke bieten 3×3. Rechtsklick nimmt ein Ergebnis; Shift-Klick craftet so viel wie möglich.</li>
         <li><b>Tooltips & Ausrüstung:</b> Über Items fahren; Nebenhand und definierte Ausrüstung werden gespeichert.</li>
         <li>Ein Cursorstapel wird beim Schließen als Welt-Drop vor dem Spieler abgelegt.</li>
-        <li><b>F:</b> Fliegen umschalten &nbsp;|&nbsp; <b>F3:</b> Debug-Infos</li>
+        <li><b>F1:</b> HUD für Screenshots aus-/einblenden &nbsp;|&nbsp; <b>F:</b> Fliegen &nbsp;|&nbsp; <b>F3:</b> Debug-Infos</li>
+        <li>Unter Einstellungen lässt sich Kamerabewegung reduzieren; Zielhinweise zeigen Blockaktionen am Fadenkreuz.</li>
         <li><b>M:</b> Spielmodus wechseln &nbsp;|&nbsp; <b>P:</b> Friedlich umschalten</li>
         <li><b>T:</b> Tag/Nacht springen &nbsp;|&nbsp; <b>O:</b> Wetter umschalten</li>
         <li><b>F5:</b> Spiel speichern</li>

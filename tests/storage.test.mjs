@@ -49,16 +49,19 @@ store.set(SETTINGS_KEY, JSON.stringify({
   particles: 'ultra',
   showDebug: true,
   invertY: 'false',
+  reduceMotion: true,
   autosave: false,
 }));
 const settings = loadSettings();
 ok(settings.renderDistance === 10 && settings.fov === 60 && settings.volume === 0
   && settings.dayLength === 450 && settings.autosaveInterval === 3600
-  && settings.showDebug === true && settings.autosave === false
+  && settings.showDebug === true && settings.autosave === false && settings.reduceMotion === true
   && !('sensitivity' in settings) && !('particles' in settings) && !('invertY' in settings),
   'Geladene Einstellungen werden auf bekannte Typen und sichere Wertebereiche normalisiert');
 ok({ ...defaultSettings(false), ...settings }.sensitivity === defaultSettings(false).sensitivity,
   'Ungültige Einstellungen fallen auf geräteabhängige Standardwerte zurück');
+store.set(SETTINGS_KEY, JSON.stringify({ reduceMotion: 'yes' }));
+ok(!('reduceMotion' in loadSettings()), 'Kamerabewegungseinstellung akzeptiert ausschließlich echte boolesche Werte');
 
 const originalSetItem = localStorage.setItem;
 localStorage.setItem = (key, value) => {

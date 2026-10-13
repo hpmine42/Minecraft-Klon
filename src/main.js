@@ -6,6 +6,7 @@ import { TouchControls, isTouchDevice, screenRayDirection } from './core/touch.j
 import { AudioEngine } from './core/audio.js';
 import { createAtlasCanvas, drawTileIcon } from './world/textures.js';
 import { World, SEA_LEVEL } from './world/world.js';
+import { BIOME_NAMES } from './world/worldgen.js';
 import { BLOCKS, BLOCK, getName, TOOL, isPlaceable } from './world/blocks.js';
 import { Player, PHYS } from './player/player.js';
 import { Inventory, matchRecipe, HOTBAR_SIZE } from './player/inventory.js';
@@ -32,7 +33,12 @@ class Game {
   constructor() {
     this.state = 'boot'; // boot | menu | loading | playing | paused | inventory | dead
     this.isTouch = isTouchDevice();
-    this.settings = { ...defaultSettings(this.isTouch), ...(loadSettings() || {}) };
+    const savedSettings = loadSettings() || {};
+    const defaults = defaultSettings(this.isTouch);
+    if (typeof savedSettings.reduceMotion !== 'boolean') {
+      defaults.reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+    }
+    this.settings = { ...defaults, ...savedSettings };
     this.timeOfDay = 0.22;
     this.weather = 'clear'; // clear | rain
     this.weatherTimer = 90 + Math.random() * 180;
@@ -95,6 +101,9 @@ class Game {
     }) : null;
 
     this.hud = new HUD({
+      root: $('hud'),
+      worldStatus: $('world-status'),
+      targetHint: $('target-hint'),
       hotbar: $('hotbar'),
       heldItemView: $('held-item-view'),
       heldItemIcon: $('held-item-icon'),
@@ -153,14 +162,17 @@ class Game {
       'setting-day-length': $('setting-day-length'),
       'setting-particles': $('setting-particles'),
       'setting-invert-y': $('setting-invert-y'),
+      'setting-reduced-motion': $('setting-reduced-motion'),
       'setting-debug': $('setting-debug'),
       'setting-autosave': $('setting-autosave'),
     }, this.atlasCanvas, this.inventory, {
       onPlay: () => this.continueGame(),
       onNewWorld: () => this.startNewWorld(),
       onResume: () => this.resume(),
-      onSave: () => { this.saveNow(); this.toast('Spiel gespeichert!'); },
-      onQuit: () => { this.saveNow(); this.quitToMenu(); },
+      onSave: () => this._saveWithFeedback(),
+      onQuit: () => {
+        if (this._saveWithFeedback()) this.quitToMenu();
+      },
       onRespawn: () => this.respawn(),
       onSettingsChange: (key, value) => this.applySetting(key, value),
       onResetWorld: () => { deleteSave(); this.startNewWorld(); },
@@ -330,6 +342,10 @@ class Game {
       }
 
       this.state = 'playing';
+      this.hud.setHidden(false);
+      this.hud.setWorldStatus();
+      this.hud.setTargetHint(null);
+      this.worldStatusTimer = 0;
       this.menus.hideAll();
       if (!this.isTouch) this.input.lock();
       this.toast('Willkommen! Viel Spaß beim Bauen.');
@@ -380,6 +396,10 @@ class Game {
         this.world.update(this.player.position.x, this.player.position.z, Math.min(2, this.settings.renderDistance), 40, Infinity);
       }
       this.state = 'playing';
+      this.hud.setHidden(false);
+      this.hud.setWorldStatus();
+      this.hud.setTargetHint(null);
+      this.worldStatusTimer = 0;
       this.menus.hideAll();
       if (!this.isTouch) this.input.lock();
       this.toast('Spielstand geladen.');
@@ -452,6 +472,20 @@ class Game {
     this.interaction.onBlockBreak = (x, y, z, id) => this._onContainerBlockBreak(x, y, z, id);
   }
 
+  _saveWithFeedback() {
+    const saved = this.saveNow();
+    const message = saved
+      ? 'Spiel gespeichert!'
+      : 'Speichern fehlgeschlagen – deine Welt bleibt geöffnet.';
+    if (this.state !== 'paused') this.toast(message);
+    const feedback = $('save-feedback');
+    if (feedback) {
+      feedback.textContent = this.state === 'paused' ? message : '';
+      feedback.classList.toggle('error', this.state === 'paused' && !saved);
+    }
+    return saved;
+  }
+
   saveNow() {
     if (!this.world || !this.player || this.state === 'menu') return false;
     const ok = saveGame(this.world, this.player, this.inventory, {
@@ -479,7 +513,10 @@ class Game {
 
   quitToMenu() {
     this.state = 'menu';
+    this.hud.setHidden(false);
     this.hud.setGameplayActive(false);
+    this.hud.setTargetHint(null);
+    this.hud.setWorldStatus();
     this.menuPreview?.setVisible(!this.world);
     if (this.input.locked) this.input.unlock();
     this.menus.showScreen('main-menu');
@@ -493,6 +530,7 @@ class Game {
     this.player.respawn(spawn);
     this.touch?.setSneak(false);
     this.state = 'playing';
+    this.hud.setHidden(false);
     this.hud.setGameplayActive(true);
     this.menus.hideAll();
     if (!this.isTouch) this.input.lock();
@@ -555,15 +593,19 @@ class Game {
     if (this.state !== 'playing') return;
     this.state = 'paused';
     this.hud.setGameplayActive(false);
+    const feedback = $('save-feedback');
+    if (feedback) { feedback.textContent = ''; feedback.classList.remove('error'); }
     if (this.input.locked) this.input.unlock();
     this.menus.showScreen('pause-menu');
-    this.saveNow();
+    this._saveWithFeedback();
   }
 
   resume() {
     if (this.state !== 'paused') return;
     this.state = 'playing';
     this.hud.setGameplayActive(true);
+    const feedback = $('save-feedback');
+    if (feedback) { feedback.textContent = ''; feedback.classList.remove('error'); }
     this.menus.hideAll();
     if (!this.isTouch) this.input.lock();
   }
@@ -706,6 +748,9 @@ class Game {
       case 'particles':
         this.particles?.setQuality(value);
         break;
+      case 'reduceMotion':
+        if (value) this.engine.updateFov(false, 0.25);
+        break;
       case 'showDebug':
         if (this.debug) {
           if (value && !this.debug.visible) this.debug.toggle();
@@ -738,6 +783,12 @@ class Game {
         break;
       case 'KeyF':
         this._toggleFlight();
+        break;
+      case 'F1':
+        if (this.state === 'playing') {
+          e.preventDefault();
+          this.hud.setHidden(!this.hud.hidden);
+        }
         break;
       case 'F3':
         e.preventDefault();
@@ -777,10 +828,7 @@ class Game {
         break;
       case 'F5':
         e.preventDefault();
-        if (this.state === 'playing' || this.state === 'paused') {
-          this.saveNow();
-          this.toast('Gespeichert!');
-        }
+        if (this.state === 'playing' || this.state === 'paused') this._saveWithFeedback();
         break;
       case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4': case 'Digit5':
       case 'Digit6': case 'Digit7': case 'Digit8': case 'Digit9':
@@ -884,7 +932,7 @@ class Game {
       }
       // Rendering auch im Pause-Menü (Hintergrund bleibt sichtbar)
       this.engine.updateSky(this.timeOfDay, this.settings.renderDistance, dt, this.rainStrength);
-      this.engine.updateFov(this.player.sprinting, dt);
+      this.engine.updateFov(this.player.sprinting && !this.settings.reduceMotion, dt);
       this.engine.render();
     }
   }
@@ -1109,7 +1157,9 @@ class Game {
     // ---- Kamera -------------------------------------------------------------
     const eye = player.eyePosition();
     // leichtes Kopf-Bobbing beim Gehen
-    const bobAmp = player.onGround && hSpeed > 1 ? Math.min(0.045, hSpeed * 0.008) : 0;
+    const bobAmp = !this.settings.reduceMotion && player.onGround && hSpeed > 1
+      ? Math.min(0.045, hSpeed * 0.008)
+      : 0;
     const bob = Math.sin(player.walkTime * 3.5) * bobAmp;
     this.engine.camera.position.set(eye.x, eye.y + bob, eye.z);
     this.engine.camera.rotation.order = 'YXZ';
@@ -1120,6 +1170,18 @@ class Game {
     this.hud.updateFPS(dt);
     this.hud.setBreakProgress(this.interaction.breakFraction);
     this.hud.setGamemodeLabel(player.gamemode, player.peaceful);
+    this.hud.setTargetHint(outlineTarget, player, this.isTouch);
+    this.worldStatusTimer = (this.worldStatusTimer ?? 0) - dt;
+    if (this.worldStatusTimer <= 0) {
+      const biomeId = this.world.gen.biomeAt(Math.floor(player.position.x), Math.floor(player.position.z));
+      this.hud.setWorldStatus({
+        biome: BIOME_NAMES[biomeId] || 'Unbekanntes Gebiet',
+        timeOfDay: this.timeOfDay,
+        weather: this.weather,
+        y: player.position.y,
+      });
+      this.worldStatusTimer = 1;
+    }
 
     this.debug.update(player, this.world, this.hud.fps, this.mobs, {
       time: this.timeOfDay,

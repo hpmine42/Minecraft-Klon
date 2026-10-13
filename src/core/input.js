@@ -21,8 +21,8 @@ export class Input {
       if (e.repeat) return;
       this.keys.add(e.code);
       if (this.onKey) this.onKey(e.code, true, e);
-      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'F3', 'KeyE'].includes(e.code)) {
-        if (e.code === 'Tab' || e.code === 'F3' || e.code === 'Space') e.preventDefault();
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'F1', 'F3', 'KeyE'].includes(e.code)) {
+        if (e.code === 'Tab' || e.code === 'F1' || e.code === 'F3' || e.code === 'Space') e.preventDefault();
       }
     };
     this._onKeyUp = (e) => {

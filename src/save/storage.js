@@ -33,7 +33,7 @@ function sanitizeSettings(data) {
     const value = Math.max(min, Math.min(max, data[key]));
     clean[key] = integer ? Math.round(value) : value;
   }
-  for (const key of ['showDebug', 'invertY', 'autosave']) {
+  for (const key of ['showDebug', 'invertY', 'autosave', 'reduceMotion']) {
     if (typeof data[key] === 'boolean') clean[key] = data[key];
   }
   if (data.particles === 'high' || data.particles === 'low') clean.particles = data.particles;
@@ -126,6 +126,7 @@ export function defaultSettings(isMobile) {
     dayLength: 480,           // Sekunden pro Tag
     showDebug: false,
     invertY: false,
+    reduceMotion: false,
     autosaveInterval: 60,
     particles: isMobile ? 'low' : 'high',
   };

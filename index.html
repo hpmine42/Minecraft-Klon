@@ -21,6 +21,8 @@
     <div id="hurt-overlay"></div>
 
     <div id="crosshair"><div class="ch-h"></div><div class="ch-v"></div></div>
+    <div id="target-hint" aria-live="polite"></div>
+    <div id="world-status" aria-live="off"></div>
     <div id="break-progress"></div>
 
     <div id="stats-bars">
@@ -165,6 +167,7 @@
           <button id="btn-resume" class="menu-btn primary">▸ Weiterspielen</button>
           <button id="btn-settings-from-pause" class="menu-btn">⚙ Einstellungen</button>
           <button id="btn-save" class="menu-btn">💾 Spiel speichern</button>
+          <p id="save-feedback" class="save-feedback" role="status" aria-live="polite"></p>
           <button id="btn-quit" class="menu-btn">🏠 Speichern & zum Hauptmenü</button>
         </div>
       </div>
@@ -223,6 +226,10 @@
               <label class="setting-toggle">
                 <input id="setting-invert-y" type="checkbox">
                 <span class="setting-toggle-copy"><strong>Y-Achse invertieren</strong><small>Nach oben ziehen blickt nach unten.</small></span>
+              </label>
+              <label class="setting-toggle">
+                <input id="setting-reduced-motion" type="checkbox">
+                <span class="setting-toggle-copy"><strong>Kamerabewegung reduzieren</strong><small>Deaktiviert Kopf-Bobbing und den Sprint-Zoom.</small></span>
               </label>
             </div>
           </section>

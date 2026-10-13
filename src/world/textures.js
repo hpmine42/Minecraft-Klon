@@ -57,6 +57,36 @@ function clamp255(v) {
   return Math.max(0, Math.min(255, Math.round(v)));
 }
 
+/** Kleine, wiederholbare Steinsegmente mit Lichtkante und dunkler Fuge. */
+function drawCobblePattern(p, base = [112, 114, 113], mossy = false) {
+  p.fill(55, 58, 57, 3);
+  const stones = [
+    [0, 0, 7, 5], [8, 0, 8, 5],
+    [0, 6, 4, 4], [5, 6, 6, 4], [12, 6, 4, 4],
+    [0, 11, 7, 5], [8, 11, 8, 5],
+  ];
+  for (const [x, y, w, h] of stones) {
+    const variation = Math.round((p.rand() - 0.5) * 18);
+    const color = base.map((channel) => clamp255(channel + variation));
+    p.rect(x, y, w, h, ...color);
+    p.rect(x, y, w, 1, ...color.map((channel) => clamp255(channel + 16)));
+    p.rect(x, y, 1, h, ...color.map((channel) => clamp255(channel + 9)));
+    p.rect(x, y + h - 1, w, 1, ...color.map((channel) => clamp255(channel - 19)));
+    p.rect(x + w - 1, y, 1, h, ...color.map((channel) => clamp255(channel - 12)));
+    if (w > 5 && p.rand() > 0.38) {
+      p.set(x + 2 + Math.floor(p.rand() * (w - 3)), y + 2, ...color.map((channel) => clamp255(channel + 8)));
+    }
+  }
+  if (mossy) {
+    const patches = [[2, 2], [11, 1], [6, 7], [13, 8], [2, 13], [10, 13]];
+    for (const [x, y] of patches) {
+      const green = Math.floor(p.rand() * 18);
+      p.rect(x, y, 2, 2, 55 + green, 104 + green, 58 + green);
+      p.set(x + 1, y + 2, 72 + green, 126 + green, 70 + green);
+    }
+  }
+}
+
 /**
  * Baut den gesamten Atlas und gibt { canvas, textureData } zurück.
  * Wird sowohl im Browser (Canvas) als auch in Tests (ImageData-Array) genutzt.
@@ -85,53 +115,70 @@ export function generateAtlasData(seed = 1337) {
   };
 
   // ---- Natur ---------------------------------------------------------------
-  // 0 Gras-Top
+  // 0 Gras-Top: zusammenhängende Grasbüschel statt gleichmäßigem Farbrauschen.
   {
     const p = tile(0);
-    p.fill(96, 160, 66, 14);
-    p.speckle(28, 116, 180, 84);
-    p.speckle(18, 78, 138, 54);
+    p.fill(82, 145, 54, 11);
+    for (let i = 0; i < 9; i++) {
+      const x = Math.floor(p.rand() * 14);
+      const y = Math.floor(p.rand() * 14);
+      const c = p.rand() > 0.45 ? [113, 170, 67] : [63, 121, 46];
+      p.rect(x, y, 2 + Math.floor(p.rand() * 2), 1 + Math.floor(p.rand() * 2), ...c);
+      p.set(x + 1, y + 1, 137, 184, 78);
+    }
+    p.speckle(12, 64, 91, 44);
+    p.speckle(8, 150, 187, 87);
     drawTile(0, p);
   }
-  // 1 Gras-Seite (Erde mit Grasnarbe)
+  // 1 Gras-Seite: unregelmäßige Grasnarbe mit einer dunklen Erd-/Wurzelkante.
   {
     const p = tile(1);
-    p.fill(134, 96, 67, 10);
-    p.speckle(14, 112, 78, 54);
+    p.fill(126, 82, 54, 8);
+    p.speckle(12, 94, 57, 38);
+    p.speckle(8, 157, 112, 70);
     for (let x = 0; x < 16; x++) {
       const h = 3 + Math.floor(p.rand() * 3);
       for (let y = 0; y < h; y++) {
-        const v = (p.rand() - 0.5) * 16;
-        p.set(x, y, 92 + v, 158 + v, 64 + v);
+        const variation = (p.rand() - 0.5) * 16;
+        p.set(x, y, 78 + variation, 143 + variation, 48 + variation);
       }
+      p.set(x, h, 72, 105, 42);
+      if (p.rand() > 0.72) p.set(x, h + 1, 96, 62, 40);
     }
     drawTile(1, p);
   }
-  // 2 Stein
+  // 2 Stein: kühle, körnige Fläche mit feinen Bruchlinien und Lichtsplittern.
   {
     const p = tile(2);
-    p.fill(127, 127, 127, 10);
-    p.speckle(22, 110, 110, 110);
-    p.speckle(12, 145, 145, 145);
+    p.fill(117, 123, 126, 6);
+    p.speckle(16, 94, 101, 105);
+    p.speckle(10, 151, 155, 153);
+    const cracks = [[2, 4], [10, 2], [6, 11], [13, 9]];
+    for (const [x, y] of cracks) {
+      p.set(x, y, 82, 89, 92);
+      p.set(x + 1, y + 1, 89, 96, 99);
+      p.set(x + 2, y + 1, 147, 151, 150);
+    }
     drawTile(2, p);
   }
-  // 3 Erde
+  // 3 Erde: dunkle Krümel, warme Lehmflecken und einzelne helle Körner.
   {
     const p = tile(3);
-    p.fill(134, 96, 67, 10);
-    p.speckle(20, 112, 78, 54);
-    p.speckle(10, 152, 112, 80);
+    p.fill(126, 83, 55, 7);
+    p.speckle(20, 92, 57, 39);
+    p.speckle(12, 158, 111, 67);
+    for (let i = 0; i < 5; i++) {
+      const x = 1 + Math.floor(p.rand() * 13);
+      const y = 1 + Math.floor(p.rand() * 13);
+      p.set(x, y, 103, 65, 43);
+      p.set(x + 1, y, 145, 96, 60);
+    }
     drawTile(3, p);
   }
-  // 4 Bruchstein
+  // 4 Bruchstein: lesbare, abgeschrägte Einzelsteine mit dunklen Fugen.
   {
     const p = tile(4);
-    p.fill(105, 105, 105, 12);
-    for (let i = 0; i < 7; i++) {
-      const x = Math.floor(p.rand() * 12);
-      const y = Math.floor(p.rand() * 12);
-      p.rect(x, y, 3 + Math.floor(p.rand() * 3), 3 + Math.floor(p.rand() * 3), 88 + p.rand() * 30, 88 + p.rand() * 30, 88 + p.rand() * 30);
-    }
+    drawCobblePattern(p, [112, 115, 114]);
     drawTile(4, p);
   }
   // 5 Grundgestein
@@ -142,37 +189,57 @@ export function generateAtlasData(seed = 1337) {
     p.speckle(14, 105, 105, 105);
     drawTile(5, p);
   }
-  // 6 Sand
+  // 6 Sand: feine, warme Körnung mit vereinzelten dunkleren Mineralkörnern.
   {
     const p = tile(6);
-    p.fill(219, 205, 158, 10);
-    p.speckle(18, 200, 186, 138);
-    p.speckle(12, 234, 222, 178);
+    p.fill(221, 204, 151, 6);
+    p.speckle(18, 194, 174, 119);
+    p.speckle(14, 239, 225, 180);
+    for (let i = 0; i < 6; i++) {
+      const x = Math.floor(p.rand() * 15);
+      const y = Math.floor(p.rand() * 15);
+      p.set(x, y, 177, 153, 103);
+      p.set(x + 1, y, 233, 216, 165);
+    }
     drawTile(6, p);
   }
-  // 7 Kies
+  // 7 Kies: abgerundete, unterschiedlich helle Kiesel statt zufälliger Quadrate.
   {
     const p = tile(7);
-    p.fill(127, 120, 114, 12);
-    for (let i = 0; i < 10; i++) {
-      const x = Math.floor(p.rand() * 14);
-      const y = Math.floor(p.rand() * 14);
-      const c = 100 + p.rand() * 50;
-      p.rect(x, y, 2, 2, c, c - 5, c - 8);
+    p.fill(105, 103, 99, 6);
+    for (let i = 0; i < 13; i++) {
+      const x = Math.floor(p.rand() * 13);
+      const y = Math.floor(p.rand() * 13);
+      const c = 99 + Math.floor(p.rand() * 47);
+      p.set(x + 1, y, c + 8, c + 6, c + 3);
+      p.rect(x, y + 1, 2 + Math.floor(p.rand() * 2), 2, c, c - 3, c - 7);
+      p.set(x + 1, y + 2, c - 14, c - 15, c - 16);
     }
     drawTile(7, p);
   }
-  // 8 Sandstein Top
+  // 8 Sandstein Top: ruhige Platte mit hellen Sedimentschichten und Fossilpixeln.
   {
     const p = tile(8);
-    p.fill(216, 202, 155, 8);
+    p.fill(216, 194, 139, 6);
+    for (let i = 0; i < 3; i++) {
+      const x = 1 + Math.floor(p.rand() * 12);
+      const y = 2 + Math.floor(p.rand() * 11);
+      p.rect(x, y, 2 + Math.floor(p.rand() * 3), 1, 189, 166, 113);
+      p.set(x + 1, y + 1, 235, 218, 169);
+    }
     drawTile(8, p);
   }
-  // 9 Sandstein Seite
+  // 9 Sandstein Seite: versetzte, klar lesbare Sedimentblöcke.
   {
     const p = tile(9);
-    p.fill(216, 202, 155, 8);
-    for (let y = 2; y < 16; y += 5) p.rect(0, y, 16, 1, 196, 182, 135);
+    p.fill(218, 196, 141, 5);
+    for (let y = 0; y < 16; y += 5) {
+      p.rect(0, y, 16, 1, 177, 155, 112);
+      const offset = (y / 5) % 2 === 0 ? 3 : 11;
+      p.rect(offset, y, 1, 5, 184, 160, 114);
+      p.rect(offset + 8 > 15 ? offset - 8 : offset + 8, y, 1, 5, 184, 160, 114);
+      p.rect(1, y + 1, 3, 1, 237, 218, 164);
+    }
     drawTile(9, p);
   }
   // 10 Sandstein Bottom
@@ -240,15 +307,21 @@ export function generateAtlasData(seed = 1337) {
     p.rect(3, 5, 8, 2, 250, 190, 60);
     drawTile(17, p);
   }
-  // ---- Erze (Stein-Basis + Farbtupfer) ------------------------------------
+  // ---- Erze: dunkle Adern, eingefasste Erzadern und kleine Glanzpunkte. ----
   const oreTile = (index, r, g, b) => {
     const p = tile(index);
-    p.fill(127, 127, 127, 10);
+    p.fill(111, 117, 119, 7);
+    p.speckle(18, 91, 98, 101);
+    p.speckle(8, 147, 151, 150);
     for (let i = 0; i < 5; i++) {
       const x = 1 + Math.floor(p.rand() * 12);
       const y = 1 + Math.floor(p.rand() * 12);
-      p.rect(x, y, 2 + Math.floor(p.rand() * 2), 2 + Math.floor(p.rand() * 2), r, g, b);
-      p.set(x + 1, y + 1, clamp255(r * 1.25), clamp255(g * 1.25), clamp255(b * 1.25));
+      const w = 2 + Math.floor(p.rand() * 2);
+      const h = 2 + Math.floor(p.rand() * 2);
+      p.rect(x - 1, y, w + 1, h, clamp255(r * 0.48), clamp255(g * 0.48), clamp255(b * 0.48));
+      p.rect(x, y, w, h - 1, r, g, b);
+      p.set(x + 1, y, clamp255(r * 1.18), clamp255(g * 1.18), clamp255(b * 1.18));
+      p.set(x + w - 1, y + h - 1, clamp255(r * 0.78), clamp255(g * 0.78), clamp255(b * 0.78));
     }
     drawTile(index, p);
   };
@@ -335,13 +408,17 @@ export function generateAtlasData(seed = 1337) {
     p.speckle(14, 60, 114, 64);
     drawTile(31, p);
   }
-  // 32 Bretter
+  // 32 Bretter: warm geäderte Dielen mit wechselnden Maserungen und Astlöchern.
   {
     const p = tile(32);
-    p.fill(178, 143, 88, 8);
+    p.fill(176, 136, 78, 6);
     for (let y = 0; y < 16; y += 4) {
-      p.rect(0, y, 16, 1, 148, 116, 68);
-      p.rect(Math.floor(p.rand() * 10), y + 1, 1, 3, 150, 118, 70);
+      p.rect(0, y, 16, 1, 129, 95, 54);
+      const knotX = 2 + Math.floor(p.rand() * 11);
+      p.set(knotX, y + 2, 123, 82, 43);
+      p.set(knotX + 1, y + 2, 204, 164, 103);
+      p.rect(1, y + 1, 2 + Math.floor(p.rand() * 3), 1, 194, 157, 94);
+      p.rect(10 + Math.floor(p.rand() * 3), y + 3, 3, 1, 151, 111, 59);
     }
     drawTile(32, p);
   }
@@ -462,38 +539,38 @@ export function generateAtlasData(seed = 1337) {
     p.speckle(16, 214, 214, 214);
     drawTile(44, p);
   }
-  // 45 Ziegelsteine
+  // 45 Ziegelsteine: warme, versetzte Ziegel mit dunkler Mörtelfuge und Lichtkante.
   {
     const p = tile(45);
-    p.fill(156, 82, 68, 8);
+    p.fill(155, 75, 59, 5);
     for (let y = 0; y < 16; y += 4) {
-      p.rect(0, y, 16, 1, 190, 190, 190);
-      const off = (y / 4) % 2 === 0 ? 3 : 11;
-      p.rect(off, y, 1, 4, 190, 190, 190);
-      p.rect(off + 8 > 15 ? off - 8 : off + 8, y, 1, 4, 190, 190, 190);
+      p.rect(0, y, 16, 1, 89, 55, 47);
+      const offset = (y / 4) % 2 === 0 ? 3 : 11;
+      for (const x of [offset, offset + 8 > 15 ? offset - 8 : offset + 8]) {
+        p.rect(x, y + 1, 1, 3, 104, 60, 48);
+        p.rect(x + 1, y + 1, 2, 1, 183, 102, 78);
+      }
+      p.rect(1, y + 1, 4, 1, 183, 102, 78);
     }
     drawTile(45, p);
   }
-  // 46 Steinziegel
+  // 46 Steinziegel: behauene Quader mit feinen hellen Oberkanten.
   {
     const p = tile(46);
-    p.fill(122, 122, 122, 8);
-    p.rect(0, 7, 16, 1, 96, 96, 96);
-    p.rect(7, 0, 1, 7, 96, 96, 96);
-    p.rect(3, 8, 1, 8, 96, 96, 96);
-    p.rect(11, 8, 1, 8, 96, 96, 96);
+    p.fill(111, 116, 116, 5);
+    p.rect(0, 7, 16, 1, 65, 70, 71);
+    p.rect(7, 0, 1, 7, 76, 81, 81);
+    p.rect(3, 8, 1, 8, 76, 81, 81);
+    p.rect(11, 8, 1, 8, 76, 81, 81);
+    p.rect(1, 1, 5, 1, 145, 149, 146);
+    p.rect(9, 9, 2, 1, 140, 145, 142);
     drawTile(46, p);
   }
-  // 47 Moosiges Bruchstein
+  // 47 Moosiges Bruchstein: dasselbe Mauerwerk, von unregelmäßigen Moosflecken durchsetzt.
   {
-    const p = tile(4);
-    p.fill(105, 105, 105, 12);
-    for (let i = 0; i < 7; i++) {
-      const x = Math.floor(p.rand() * 12);
-      const y = Math.floor(p.rand() * 12);
-      p.rect(x, y, 3, 3, 88 + p.rand() * 20, 88 + p.rand() * 20, 88 + p.rand() * 20);
-    }
-    p.speckle(26, 84, 130, 70);
+    const p = tile(47);
+    drawCobblePattern(p, [105, 111, 102], true);
+    p.speckle(9, 73, 133, 71);
     drawTile(47, p);
   }
   // 48 Ackerboden Top (feucht)
@@ -821,11 +898,18 @@ export function createWaterTexture() {
   const ctx = canvas.getContext('2d');
   for (let f = 0; f < frames; f++) {
     const p = makeTilePainter(200 + f, 4242);
-    p.fill(52, 108, 202, 10);
-    for (let i = 0; i < 8; i++) {
+    p.fill(37, 99, 184, 6);
+    p.speckle(9, 31, 83, 160);
+    // Gebrochene, horizontale Lichtwellen verschieben sich von Frame zu Frame.
+    for (let x = 0; x < TILE_SIZE; x += 2) {
+      const waveY = (Math.floor(5 + Math.sin((x + f * 3) * 0.52) * 3) + TILE_SIZE) % TILE_SIZE;
+      p.rect(x, waveY, 2, 1, 111, 177, 234);
+      p.set(x + 1, waveY + 1, 71, 139, 211);
+    }
+    for (let i = 0; i < 3; i++) {
       const x = Math.floor(p.rand() * 14);
-      const y = Math.floor(p.rand() * 14);
-      p.rect(x, y, 2 + Math.floor(p.rand() * 3), 1, 86, 142, 222);
+      const y = Math.floor(p.rand() * 13);
+      p.rect(x, y, 2 + Math.floor(p.rand() * 3), 1, 73, 142, 211);
     }
     const img = ctx.createImageData(TILE_SIZE, TILE_SIZE);
     img.data.set(p.data);
@@ -842,14 +926,16 @@ export function createLavaTexture() {
   const ctx = canvas.getContext('2d');
   for (let f = 0; f < frames; f++) {
     const p = makeTilePainter(210 + f, 999);
-    p.fill(206, 92, 20, 16);
-    p.speckle(20, 240, 160, 40);
-    p.speckle(14, 150, 40, 10);
-    for (let i = 0; i < 3; i++) {
-      const x = Math.floor(p.rand() * 12);
-      const y = Math.floor(p.rand() * 12);
-      p.rect(x, y, 4, 2, 250, 190, 60);
+    p.fill(170, 58, 15, 9);
+    p.speckle(20, 115, 34, 9);
+    // Helle Magmaströme wandern leicht, ohne dass die ganze Fläche flackert.
+    for (let x = 0; x < TILE_SIZE; x += 4) {
+      const y = (Math.floor(4 + Math.sin((x - f * 2) * 0.56) * 3) + TILE_SIZE) % TILE_SIZE;
+      p.rect(x, y, 3, 2, 237, 108, 23);
+      p.rect(x + 1, y, 2, 1, 255, 190, 67);
+      p.set(x + 2, y + 2, 205, 68, 12);
     }
+    p.speckle(8, 255, 184, 50);
     const img = ctx.createImageData(TILE_SIZE, TILE_SIZE);
     img.data.set(p.data);
     ctx.putImageData(img, f * TILE_SIZE, 0);
