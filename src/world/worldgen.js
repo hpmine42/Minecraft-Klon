@@ -44,10 +44,14 @@ export class WorldGen {
 
   /** Biome an einer Säule bestimmen. */
   biomeAt(wx, wz) {
+    return this.biomeAtHeight(wx, wz, this.heightAt(wx, wz));
+  }
+
+  /** Biome bestimmen, wenn die Terrainhöhe bereits berechnet wurde. */
+  biomeAtHeight(wx, wz, height) {
     if (this.worldType === 'flat') return BIOME.PLAINS;
     const temp = this.tempNoise.fbm2D(wx * 0.0035, wz * 0.0035, 3);
     const humid = this.humidNoise.fbm2D(wx * 0.0035 + 100, wz * 0.0035 - 100, 3);
-    const height = this.heightAt(wx, wz);
     if (height < SEA_LEVEL - 2) return BIOME.OCEAN;
     if (height < SEA_LEVEL + 1) return BIOME.BEACH;
     if (height > SEA_LEVEL + 14) return BIOME.MOUNTAINS;
@@ -102,10 +106,10 @@ export class WorldGen {
     return BLOCK.AIR;
   }
 
-  /** Baum an Säule? Gibt Baumtyp oder null. */
-  treeAt(wx, wz) {
+  /** Baum an Säule? Gibt Baumtyp oder null. Vorhandene Spaltenwerte sparen doppelte Noise-Abfragen. */
+  treeAt(wx, wz, biome = null, height = null) {
     const r = coordHash(wx, 7, wz, this.seed ^ 0x77aa);
-    const biome = this.biomeAt(wx, wz);
+    biome ??= this.biomeAt(wx, wz);
     switch (biome) {
       case BIOME.FOREST:
         if (r < 0.028) return r < 0.014 ? 'oak' : 'birch';
@@ -117,7 +121,7 @@ export class WorldGen {
       case BIOME.SNOWY:
         return r < 0.016 ? 'spruce' : null;
       case BIOME.MOUNTAINS:
-        return r < 0.007 && this.heightAt(wx, wz) < SEA_LEVEL + 18 ? 'spruce' : null;
+        return r < 0.007 && (height ?? this.heightAt(wx, wz)) < SEA_LEVEL + 18 ? 'spruce' : null;
       default:
         return null;
     }
@@ -138,7 +142,7 @@ export class WorldGen {
         const wx = baseX + x;
         const wz = baseZ + z;
         const h = this.heightAt(wx, wz);
-        const biome = this.biomeAt(wx, wz);
+        const biome = this.biomeAtHeight(wx, wz, h);
 
         for (let y = 0; y <= Math.max(h, SEA_LEVEL); y++) {
           if (y > h && y <= SEA_LEVEL) {
@@ -198,13 +202,12 @@ export class WorldGen {
       for (let x = -3; x < CHUNK_SIZE + 3; x++) {
         const wx = baseX + x;
         const wz = baseZ + z;
-        const treeType = this.treeAt(wx, wz);
-        if (!treeType) continue;
         const h = this.heightAt(wx, wz);
-        if (h <= SEA_LEVEL) continue;
+        const biome = this.biomeAtHeight(wx, wz, h);
+        const treeType = this.treeAt(wx, wz, biome, h);
+        if (!treeType || h <= SEA_LEVEL) continue;
         // Kein Baum auf Stein/Sand-Schichten (nur Grasoberflächen)
-        const surfCheck = this.biomeAt(wx, wz);
-        if (surfCheck === BIOME.DESERT || surfCheck === BIOME.BEACH || surfCheck === BIOME.OCEAN) continue;
+        if (biome === BIOME.DESERT || biome === BIOME.BEACH || biome === BIOME.OCEAN) continue;
         this.placeTree(chunk, x, h, z, treeType, wx, wz);
       }
     }
@@ -216,7 +219,7 @@ export class WorldGen {
         const wz = baseZ + z;
         const h = this.heightAt(wx, wz);
         if (h < SEA_LEVEL) continue;
-        const biome = this.biomeAt(wx, wz);
+        const biome = this.biomeAtHeight(wx, wz, h);
         const ground = blocks[blockIndex(x, h, z)];
         const above = blockIndex(x, h + 1, z);
         if (blocks[above] !== BLOCK.AIR) continue;

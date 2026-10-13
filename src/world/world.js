@@ -1,8 +1,26 @@
 // world.js — Chunk-Verwaltung, Licht, Raycast, Block-Zugriff.
 import * as THREE from '../../lib/three.module.js';
 import { BLOCKS, BLOCK, RENDER, isOpaque, isTransparent } from './blocks.js';
-import { Chunk, CHUNK_SIZE, CHUNK_HEIGHT, blockIndex, buildChunkGeometry } from './chunk.js';
+import { Chunk, CHUNK_SIZE, CHUNK_HEIGHT, CHUNK_VOLUME, blockIndex, buildChunkGeometry } from './chunk.js';
 import { WorldGen, SEA_LEVEL } from './worldgen.js';
+
+const CHUNK_OFFSET_CACHE = new Map();
+
+function chunkOffsets(radius) {
+  if (CHUNK_OFFSET_CACHE.has(radius)) return CHUNK_OFFSET_CACHE.get(radius);
+  const offsets = [];
+  const maxDistanceSquared = (radius + 0.5) ** 2;
+  for (let dz = -radius; dz <= radius; dz++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const distanceSquared = dx * dx + dz * dz;
+      if (distanceSquared <= maxDistanceSquared) offsets.push({ dx, dz, distanceSquared });
+    }
+  }
+  offsets.sort((a, b) => a.distanceSquared - b.distanceSquared || a.dz - b.dz || a.dx - b.dx);
+  const ordered = offsets.map(({ dx, dz }) => [dx, dz]);
+  CHUNK_OFFSET_CACHE.set(radius, ordered);
+  return ordered;
+}
 
 export class World {
   /**
@@ -16,10 +34,13 @@ export class World {
     this.gen = new WorldGen(this.seed, worldType);
     this.chunks = new Map();
     this.modified = new Map();     // "x,y,z" -> {id, meta} — Spieler-Änderungen
+    this.modifiedByChunk = new Map();
+    this._modifiedIndexReady = false;
     // Container-Inhalte werden separat unter "x,y,z" gespeichert.
     this.furnaces = new Map();
     this.chests = new Map();
     this.materials = materials || {};
+    this._lightQueue = new Int32Array(CHUNK_VOLUME * 4);
     this.meshQueue = [];
     this.chunksDirty = new Set();
   }
@@ -42,23 +63,42 @@ export class World {
     return chunk;
   }
 
+  /** Erstellt bei Bedarf einmalig einen Chunk-Index für persistierte Blockänderungen. */
+  _ensureModifiedIndex() {
+    if (this._modifiedIndexReady) return;
+    this.modifiedByChunk.clear();
+    for (const [pos, value] of this.modified) this._indexModifiedEntry(pos, value);
+    this._modifiedIndexReady = true;
+  }
+
+  _indexModifiedEntry(pos, value) {
+    const coords = typeof pos === 'string' ? pos.split(',').map(Number) : [];
+    if (coords.length !== 3 || !coords.every(Number.isInteger)) return;
+    const [x, y, z] = coords;
+    if (y < 0 || y >= CHUNK_HEIGHT) return;
+    const cx = Math.floor(x / CHUNK_SIZE);
+    const cz = Math.floor(z / CHUNK_SIZE);
+    const key = World.chunkKey(cx, cz);
+    let bucket = this.modifiedByChunk.get(key);
+    if (!bucket) {
+      bucket = new Map();
+      this.modifiedByChunk.set(key, bucket);
+    }
+    bucket.set(blockIndex(x - cx * CHUNK_SIZE, y, z - cz * CHUNK_SIZE), value);
+  }
+
   /** Chunk generieren (Terrain + Spieler-Änderungen anwenden). */
   generateChunk(cx, cz) {
     const chunk = this.getOrCreateChunk(cx, cz);
     if (chunk.generated) return chunk;
     this.gen.generate(chunk, this);
-    // Gespeicherte Änderungen anwenden
-    const baseX = cx * CHUNK_SIZE;
-    const baseZ = cz * CHUNK_SIZE;
-    for (const [key, val] of this.modified) {
-      const [mx, my, mz] = key.split(',').map(Number);
-      if (mx >= baseX && mx < baseX + CHUNK_SIZE && mz >= baseZ && mz < baseZ + CHUNK_SIZE) {
-        const lx = mx - baseX;
-        const lz = mz - baseZ;
-        if (my >= 0 && my < CHUNK_HEIGHT) {
-          chunk.blocks[blockIndex(lx, my, lz)] = val.id;
-          chunk.meta[blockIndex(lx, my, lz)] = val.meta || 0;
-        }
+    // Änderungen nur in diesem Chunk anwenden, nicht die gesamte Weltkarte scannen.
+    this._ensureModifiedIndex();
+    const changes = this.modifiedByChunk.get(World.chunkKey(cx, cz));
+    if (changes) {
+      for (const [index, val] of changes) {
+        chunk.blocks[index] = val.id;
+        chunk.meta[index] = val.meta || 0;
       }
     }
     this.recomputeLight(chunk);
@@ -124,7 +164,10 @@ export class World {
     chunk.lightDirty = true;
 
     if (record) {
-      this.modified.set(`${x},${y},${z}`, { id, meta });
+      const pos = `${x},${y},${z}`;
+      const value = { id, meta };
+      this.modified.set(pos, value);
+      if (this._modifiedIndexReady) this._indexModifiedEntry(pos, value);
     }
 
     // Licht sofort neu berechnen (BFS über den Chunk ist günstig)
@@ -184,71 +227,90 @@ export class World {
     chunk.lightDirty = false;
   }
 
-  _spreadLight(chunk, lightArray, initial, isSky) {
-    // Einfache BFS über den Chunk (+ Nachbarn via world.getBlock)
-    const queue = [];
+  _spreadLight(chunk, lightArray, _initial, isSky) {
+    // Flache, wiederverwendbare Queue statt tausender temporärer Nachbar-Arrays.
+    let queue = this._lightQueue;
+    let head = 0;
+    let tail = 0;
+    const enqueue = (x, y, z, level) => {
+      if (tail + 4 > queue.length) {
+        const grown = new Int32Array(queue.length * 2);
+        grown.set(queue);
+        queue = grown;
+      }
+      queue[tail++] = x;
+      queue[tail++] = y;
+      queue[tail++] = z;
+      queue[tail++] = level;
+    };
     const blocks = chunk.blocks;
     for (let y = 0; y < CHUNK_HEIGHT; y++) {
       for (let z = 0; z < CHUNK_SIZE; z++) {
         for (let x = 0; x < CHUNK_SIZE; x++) {
-          const v = lightArray[blockIndex(x, y, z)];
-          if (v > 0) queue.push(x, y, z, v);
+          const level = lightArray[blockIndex(x, y, z)];
+          if (level > 0) enqueue(x, y, z, level);
         }
       }
     }
-    const baseX = chunk.cx * CHUNK_SIZE;
-    const baseZ = chunk.cz * CHUNK_SIZE;
-    let head = 0;
-    while (head < queue.length) {
+
+    const visit = (x, y, z, level) => {
+      if (y < 0 || y >= CHUNK_HEIGHT || x < 0 || x >= CHUNK_SIZE || z < 0 || z >= CHUNK_SIZE) return;
+      const index = blockIndex(x, y, z);
+      const id = blocks[index];
+      const def = BLOCKS[id];
+      if (id !== BLOCK.AIR && def && !def.transparent) return;
+      if (lightArray[index] < level) {
+        lightArray[index] = level;
+        enqueue(x, y, z, level);
+      }
+    };
+
+    while (head < tail) {
       const x = queue[head++], y = queue[head++], z = queue[head++], level = queue[head++];
       if (level <= 1) continue;
-      const neighbors = [
-        [x + 1, y, z], [x - 1, y, z], [x, y + 1, z], [x, y - 1, z], [x, y, z + 1], [x, y, z - 1],
-      ];
-      for (const [nx, ny, nz] of neighbors) {
-        if (ny < 0 || ny >= CHUNK_HEIGHT) continue;
-        if (nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) continue; // Chunk-lokal
-        const ni = blockIndex(nx, ny, nz);
-        const nid = blocks[ni];
-        const ndef = BLOCKS[nid];
-        const opaque = nid !== BLOCK.AIR && ndef && !ndef.transparent;
-        if (opaque) continue;
-        // Himmelslicht fällt nach unten ungeschwächt durch Luft
-        let next = level - 1;
-        if (isSky && ny === y - 1) next = level; // senkrecht nach unten
-        if (lightArray[ni] < next) {
-          lightArray[ni] = next;
-          queue.push(nx, ny, nz, next);
-        }
-      }
+      const spread = level - 1;
+      visit(x + 1, y, z, spread);
+      visit(x - 1, y, z, spread);
+      visit(x, y + 1, z, spread);
+      visit(x, y - 1, z, isSky ? level : spread);
+      visit(x, y, z + 1, spread);
+      visit(x, y, z - 1, spread);
     }
-    // Licht an den Chunk-Rändern aus Nachbarn übernehmen (approximiert)
+    this._lightQueue = queue;
+
+    // Licht an den Chunk-Rändern aus Nachbarn übernehmen (approximiert).
+    const baseX = chunk.cx * CHUNK_SIZE;
+    const baseZ = chunk.cz * CHUNK_SIZE;
+    const includeNeighbor = (worldX, worldZ, y, best) => {
+      const ncx = Math.floor(worldX / CHUNK_SIZE);
+      const ncz = Math.floor(worldZ / CHUNK_SIZE);
+      const neighbor = this.getChunk(ncx, ncz);
+      if (!neighbor || !neighbor.generated) return best;
+      const nx = worldX - ncx * CHUNK_SIZE;
+      const nz = worldZ - ncz * CHUNK_SIZE;
+      const index = blockIndex(nx, y, nz);
+      const id = neighbor.blocks[index];
+      const def = BLOCKS[id];
+      if (id !== BLOCK.AIR && def && !def.transparent) return best;
+      const neighborLight = isSky ? neighbor.skyLight[index] : neighbor.blockLight[index];
+      return Math.max(best, Math.max(0, neighborLight - 1));
+    };
     for (let y = 0; y < CHUNK_HEIGHT; y++) {
       for (let z = 0; z < CHUNK_SIZE; z++) {
         for (let x = 0; x < CHUNK_SIZE; x++) {
           if (x > 0 && x < CHUNK_SIZE - 1 && z > 0 && z < CHUNK_SIZE - 1) continue;
-          const wx = baseX + x;
-          const wz = baseZ + z;
-          const id = blocks[blockIndex(x, y, z)];
+          const index = blockIndex(x, y, z);
+          const id = blocks[index];
           const def = BLOCKS[id];
           if (id !== BLOCK.AIR && def && !def.transparent) continue;
-          const neighborVals = [
-            [wx + 1, y, wz], [wx - 1, y, wz], [wx, y, wz + 1], [wx, y, wz - 1],
-          ];
-          let best = lightArray[blockIndex(x, y, z)];
-          for (const [ox, oy, oz] of neighborVals) {
-            const nChunk = this.getChunk(Math.floor(ox / CHUNK_SIZE), Math.floor(oz / CHUNK_SIZE));
-            if (!nChunk || !nChunk.generated) continue;
-            const nId = nChunk.blocks[blockIndex(ox - Math.floor(ox / CHUNK_SIZE) * CHUNK_SIZE, oy, oz - Math.floor(oz / CHUNK_SIZE) * CHUNK_SIZE)];
-            const nDef = BLOCKS[nId];
-            if (nId !== BLOCK.AIR && nDef && !nDef.transparent) continue;
-            const v = isSky
-              ? nChunk.skyLight[blockIndex(ox - Math.floor(ox / CHUNK_SIZE) * CHUNK_SIZE, oy, oz - Math.floor(oz / CHUNK_SIZE) * CHUNK_SIZE)]
-              : nChunk.blockLight[blockIndex(ox - Math.floor(ox / CHUNK_SIZE) * CHUNK_SIZE, oy, oz - Math.floor(oz / CHUNK_SIZE) * CHUNK_SIZE)];
-            const next = Math.max(0, v - 1);
-            if (next > best) best = next;
-          }
-          lightArray[blockIndex(x, y, z)] = best;
+          const wx = baseX + x;
+          const wz = baseZ + z;
+          let best = lightArray[index];
+          best = includeNeighbor(wx + 1, wz, y, best);
+          best = includeNeighbor(wx - 1, wz, y, best);
+          best = includeNeighbor(wx, wz + 1, y, best);
+          best = includeNeighbor(wx, wz - 1, y, best);
+          lightArray[index] = best;
         }
       }
     }
@@ -261,6 +323,7 @@ export class World {
   update(playerX, playerZ, renderDistance, maxBuildMs = 6, maxGenerate = 3) {
     const pcx = Math.floor(playerX / CHUNK_SIZE);
     const pcz = Math.floor(playerZ / CHUNK_SIZE);
+    const radius = Math.max(0, Math.min(32, Math.floor(Number(renderDistance) || 0)));
 
     // Chunk unter dem Spieler IMMER zuerst (kein Durchfallen!)
     let generated = 0;
@@ -274,23 +337,22 @@ export class World {
       }
     }
 
-    // Weitere fehlende Chunks generieren (Budget pro Frame)
-    for (let dz = -renderDistance; dz <= renderDistance && generated < maxGenerate; dz++) {
-      for (let dx = -renderDistance; dx <= renderDistance && generated < maxGenerate; dx++) {
-        if (dx * dx + dz * dz > (renderDistance + 0.5) * (renderDistance + 0.5)) continue;
-        const cx = pcx + dx;
-        const cz = pcz + dz;
-        const chunk = this.getChunk(cx, cz);
-        if (!chunk || !chunk.generated) {
-          this.generateChunk(cx, cz);
-          generated++;
-          const c = this.getChunk(cx, cz);
-          c.dirty = true;
-          // Nachbarn markieren (Ränder)
-          for (const [ncx, ncz] of [[cx + 1, cz], [cx - 1, cz], [cx, cz + 1], [cx, cz - 1]]) {
-            const n = this.getChunk(ncx, ncz);
-            if (n && n.generated) n.dirty = true;
-          }
+    // Weitere fehlende Chunks von nah nach fern generieren, damit der sichtbare
+    // Spielbereich vor entfernten Rand-Chunks gefüllt wird.
+    for (const [dx, dz] of chunkOffsets(radius)) {
+      if (generated >= maxGenerate) break;
+      const cx = pcx + dx;
+      const cz = pcz + dz;
+      const chunk = this.getChunk(cx, cz);
+      if (!chunk || !chunk.generated) {
+        this.generateChunk(cx, cz);
+        generated++;
+        const c = this.getChunk(cx, cz);
+        c.dirty = true;
+        // Nachbarn markieren (Ränder)
+        for (const [ncx, ncz] of [[cx + 1, cz], [cx - 1, cz], [cx, cz + 1], [cx, cz - 1]]) {
+          const n = this.getChunk(ncx, ncz);
+          if (n && n.generated) n.dirty = true;
         }
       }
     }
@@ -299,7 +361,7 @@ export class World {
     for (const [key, chunk] of this.chunks) {
       const dx = chunk.cx - pcx;
       const dz = chunk.cz - pcz;
-      if (dx * dx + dz * dz > (renderDistance + 2) * (renderDistance + 2)) {
+      if (dx * dx + dz * dz > (radius + 2) * (radius + 2)) {
         this.disposeChunkMeshes(chunk);
         this.chunks.delete(key);
       }

@@ -926,6 +926,16 @@ html, body {
   border-top: 1px solid rgba(233, 246, 239, 0.11);
 }
 #main-menu .hint span { margin-right: 5px; color: #b7e680; }
+#main-menu .save-warning {
+  margin: 0;
+  padding: 9px 11px;
+  border-left: 3px solid #f2b65e;
+  border-radius: 5px;
+  background: rgba(108, 65, 24, 0.24);
+  color: #ffdf9b;
+  font-size: 11px;
+  line-height: 1.4;
+}
 #main-menu .menu-btn:focus-visible {
   outline: 2px solid #c6f09b;
   outline-offset: 3px;

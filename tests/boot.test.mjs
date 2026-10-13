@@ -218,6 +218,11 @@ ok(game.hud.els.heldItemView.style.display === 'block'
   && game.hud.els.heldItemIcon.style.visibility === 'visible',
 'Aktuell ausgewähltes Item wird als Pixel-Item in der Spielhand angezeigt');
 ok(!!game.mobs, 'Mob-Manager vorhanden');
+game.applySetting('particles', 'low');
+const lowParticleBudget = game.particles.maxParticles === 180;
+game.applySetting('particles', 'high');
+ok(lowParticleBudget && game.particles.maxParticles === 800,
+  'Partikelqualität-Einstellung ändert das aktive Effektbudget und stellt es wieder her');
 ok(!!game.interaction, 'Interaktion vorhanden');
 ok(game.player.position.y > 0, `Spieler positioniert (y=${game.player.position.y.toFixed(1)})`);
 
@@ -378,6 +383,17 @@ const secondFlightTap = game.doubleJumpTimer;
 game._onKey({ code: 'Space', repeat: true, preventDefault() {} });
 ok(game.player.flying && game.doubleJumpTimer === secondFlightTap, 'Key-Repeat deaktiviert den Flug nicht wieder');
 game._setFlying(false);
+
+const goodSavedBytes = localStorage.getItem('minecraft-klon-save-v1');
+const invalidSavedBytes = JSON.stringify({ version: 1, seed: 42 });
+localStorage.setItem('minecraft-klon-save-v1', invalidSavedBytes);
+game.state = 'menu';
+game.continueGame();
+const saveWarning = elementsById.get('save-warning');
+ok(game.state === 'menu' && localStorage.getItem('minecraft-klon-save-v1') === invalidSavedBytes
+  && saveWarning?.hidden === false && saveWarning.textContent.includes('beschädigt'),
+'Beschädigte Speicherstände werden nicht stillschweigend durch eine neue Welt ersetzt');
+localStorage.setItem('minecraft-klon-save-v1', goodSavedBytes);
 
 console.log(`\n${passed} bestanden, ${failed} fehlgeschlagen`);
 process.exit(failed > 0 ? 1 : 0);

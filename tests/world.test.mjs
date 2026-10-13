@@ -114,7 +114,29 @@ ok(chunk.skyLight[blockIndex(0, 0, 0)] === 0, 'Kein Licht im Bedrock');
 world.setBlock(5, 40, 5, BLOCK.TORCH);
 ok(world.getBlock(5, 40, 5) === BLOCK.TORCH, 'setBlock/getBlock');
 ok(world.modified.has('5,40,5'), 'Änderung gespeichert');
+ok(world.modifiedByChunk.get('0,0')?.size === 1,
+  'Spieleränderungen werden einem Chunk-Index zugeordnet');
 ok(world.getBlockLight(5, 40, 5) === 14, `Fackel-Licht (${world.getBlockLight(5, 40, 5)})`);
+world.recomputeLight(chunk);
+const reusedLightQueue = world._lightQueue;
+world.recomputeLight(chunk);
+ok(world._lightQueue === reusedLightQueue,
+  'Wiederholte Licht-BFS verwenden denselben vorallokierten Arbeitsbuffer');
+
+const negativeModifiedWorld = new World(777, 'normal', {});
+negativeModifiedWorld.modified.set('-1,40,-17', { id: BLOCK.GLASS, meta: 0 });
+negativeModifiedWorld.generateChunk(-1, -2);
+ok(negativeModifiedWorld.getBlock(-1, 40, -17) === BLOCK.GLASS,
+  'Chunk-Index spielt Änderungen an negativen Weltkoordinaten korrekt zurück');
+
+const priorityWorld = new World(991, 'flat', {});
+priorityWorld.update(8, 8, 3, 0, 2);
+const priorityChunks = [...priorityWorld.chunks.values()].filter((candidate) => candidate.generated);
+const priorityHasCenter = priorityWorld.getChunk(0, 0)?.generated;
+const nearestChunk = priorityChunks.find((candidate) => candidate.cx !== 0 || candidate.cz !== 0);
+ok(priorityChunks.length === 2 && priorityHasCenter && nearestChunk
+  && nearestChunk.cx * nearestChunk.cx + nearestChunk.cz * nearestChunk.cz === 1,
+  'Chunk-Streaming generiert nach dem Spieler-Chunk zuerst einen direkt angrenzenden Chunk');
 
 // Raycast
 const ray = world.raycast({ x: 8.5, y: 60, z: 8.5 }, { x: 0, y: -1, z: 0 }, 40);
@@ -131,6 +153,10 @@ for (let i = 0; i < 40; i++) {
   biomesFound.add(b);
 }
 ok(biomesFound.size >= 3, `Mehrere Biome gefunden: ${[...biomesFound].map((b) => BIOME_NAMES[b]).join(', ')}`);
+const biomeCacheParity = [[-183, 117], [-37, -91], [0, 0], [46, 210], [301, -17]]
+  .every(([x, z]) => world.gen.biomeAt(x, z)
+    === world.gen.biomeAtHeight(x, z, world.gen.heightAt(x, z)));
+ok(biomeCacheParity, 'Vorberechnete Spaltenhöhe liefert dieselben Biome wie die öffentliche Abfrage');
 
 // Flat-Welt
 const flat = new World(999, 'flat', {});

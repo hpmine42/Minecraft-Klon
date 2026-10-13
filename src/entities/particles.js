@@ -2,6 +2,7 @@
 import * as THREE from '../../lib/three.module.js';
 
 const MAX_PARTICLES = 800;
+const PARTICLE_LIMITS = { high: MAX_PARTICLES, low: 180 };
 
 // Ungefähre Farben pro Block für Bruchpartikel
 export const PARTICLE_COLORS = {
@@ -55,11 +56,24 @@ export class ParticleSystem {
     this.points.frustumCulled = false;
     scene.add(this.points);
     this.geometry = geom;
+    this.quality = 'high';
+    this.maxParticles = MAX_PARTICLES;
+  }
+
+  /** Partikelbudget setzen, ohne die feste GPU-Puffergröße neu anzulegen. */
+  setQuality(quality) {
+    this.quality = quality === 'low' ? 'low' : 'high';
+    this.maxParticles = PARTICLE_LIMITS[this.quality];
+    if (this.count > this.maxParticles) this.count = this.maxParticles;
+    this.geometry.setDrawRange(0, this.count);
+    this.geometry.attributes.position.needsUpdate = true;
+    this.geometry.attributes.color.needsUpdate = true;
+    return this.quality;
   }
 
   /** Partikel erzeugen. */
   spawn(x, y, z, r, g, b, opts = {}) {
-    if (this.count >= MAX_PARTICLES) return;
+    if (this.count >= this.maxParticles) return;
     const i = this.count++;
     const vel = opts.velocity || {
       x: (Math.random() - 0.5) * (opts.spread ?? 2.5),

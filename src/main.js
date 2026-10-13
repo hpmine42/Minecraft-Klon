@@ -262,6 +262,8 @@ class Game {
   // Weltverwaltung
   // =========================================================================
   startNewWorld() {
+    const saveWarning = $('save-warning');
+    if (saveWarning) saveWarning.hidden = true;
     const seedInput = $('seed-input');
     const seedStr = seedInput && seedInput.value.trim()
       ? seedInput.value.trim()
@@ -337,9 +339,20 @@ class Game {
   continueGame() {
     const data = loadGame();
     if (!data) {
+      if (hasSave()) {
+        const warning = $('save-warning');
+        if (warning) {
+          warning.textContent = 'Der Spielstand ist beschädigt oder nicht kompatibel. Er wurde nicht verändert. Sichere ihn, bevor du eine neue Welt startest.';
+          warning.hidden = false;
+        }
+        this.menus.showScreen('main-menu');
+        return false;
+      }
       this.startNewWorld();
-      return;
+      return false;
     }
+    const warning = $('save-warning');
+    if (warning) warning.hidden = true;
     this.menuPreview?.setVisible(false);
     this.menus.setLoading('Spielstand wird geladen…');
     this.state = 'loading';
@@ -434,6 +447,7 @@ class Game {
       }
     }
     this.particles = new ParticleSystem(this.engine.scene);
+    this.particles.setQuality(this.settings.particles);
     this.interaction = new Interaction(this.world, this.player, this.inventory, this.mobs, this.particles, this.audio);
     this.interaction.onBlockBreak = (x, y, z, id) => this._onContainerBlockBreak(x, y, z, id);
   }
@@ -688,6 +702,9 @@ class Game {
         break;
       case 'volume':
         this.audio.setVolume(value);
+        break;
+      case 'particles':
+        this.particles?.setQuality(value);
         break;
       case 'showDebug':
         if (this.debug) {

@@ -201,6 +201,8 @@ game.startNewWorld();
 await new Promise((r) => setTimeout(r, 800));
 ok(game.state === 'playing', `Spiel läuft (${game.state})`);
 ok(game.world.chunks.size > 0, `Welt da (${game.world.chunks.size} Chunks)`);
+ok(game.particles.quality === 'low' && game.particles.maxParticles === 180,
+  'Mobile Standardqualität begrenzt Partikel ohne die Effekte abzuschalten');
 
 // Joystick bewegen → Spieler läuft
 const makeEvent = (touches) => ({ preventDefault() {}, stopPropagation() {}, changedTouches: touches, touches });
