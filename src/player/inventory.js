@@ -50,8 +50,8 @@ export function stacksEqual(a, b) {
 /** Rüstung wird nur akzeptiert, wenn eine existierende Itemdefinition den Slot nennt. */
 export function canEquipItem(stack, slot) {
   if (!stack || !BLOCKS[stack.id] || !EQUIPMENT_SLOTS.includes(slot)) return false;
-  if (slot === 'offhand') return true;
-  return BLOCKS[stack.id].equipmentSlot === slot;
+  const def = BLOCKS[stack.id];
+  return def.equipmentSlot === slot || def.equipmentSlots?.includes?.(slot) === true;
 }
 
 export class Inventory {

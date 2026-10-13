@@ -2,6 +2,44 @@
 const SAVE_KEY = 'minecraft-klon-save-v1';
 const SETTINGS_KEY = 'minecraft-klon-settings-v1';
 
+const isRecord = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
+
+function validSave(data) {
+  if (!isRecord(data) || data.version !== 1
+      || !Number.isInteger(data.seed) || data.seed < 0 || data.seed > 0xffffffff
+      || (data.worldType != null && !['normal', 'flat'].includes(data.worldType))
+      || !isRecord(data.inventory) || !Array.isArray(data.inventory.slots)) return false;
+  if (data.player != null && !isRecord(data.player)) return false;
+  if (data.player?.position != null) {
+    const position = data.player.position;
+    if (!isRecord(position) || ![position.x, position.y, position.z].every(Number.isFinite)) return false;
+  }
+  return true;
+}
+
+function sanitizeSettings(data) {
+  if (!isRecord(data)) return null;
+  const clean = {};
+  const numeric = {
+    renderDistance: [2, 10, true],
+    fov: [60, 110, true],
+    sensitivity: [0.0008, 0.009, false],
+    volume: [0, 1, false],
+    dayLength: [0, 1800, false],
+    autosaveInterval: [10, 3600, false],
+  };
+  for (const [key, [min, max, integer]] of Object.entries(numeric)) {
+    if (!Number.isFinite(data[key])) continue;
+    const value = Math.max(min, Math.min(max, data[key]));
+    clean[key] = integer ? Math.round(value) : value;
+  }
+  for (const key of ['showDebug', 'invertY', 'autosave']) {
+    if (typeof data[key] === 'boolean') clean[key] = data[key];
+  }
+  if (data.particles === 'high' || data.particles === 'low') clean.particles = data.particles;
+  return clean;
+}
+
 export function saveGame(world, player, inventory, extra = {}) {
   try {
     const data = {
@@ -34,7 +72,7 @@ export function loadGame() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
-    if (!data || data.version !== 1) return null;
+    if (!validSave(data)) return null;
     return data;
   } catch (e) {
     console.warn('Laden fehlgeschlagen:', e);
@@ -72,7 +110,7 @@ export function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    return sanitizeSettings(JSON.parse(raw));
   } catch (e) {
     return null;
   }

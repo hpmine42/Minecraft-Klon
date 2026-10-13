@@ -35,6 +35,11 @@
       <div id="mode-label"></div>
     </div>
 
+    <div id="held-item-view" aria-hidden="true">
+      <span class="held-arm"></span>
+      <canvas id="held-item-icon" width="32" height="32"></canvas>
+    </div>
+
     <div id="fps"></div>
     <button id="btn-fullscreen" class="fullscreen-btn" type="button" aria-label="Vollbildmodus aktivieren" aria-pressed="false" title="Vollbildmodus umschalten">⛶</button>
     <pre id="debug"></pre>
@@ -98,6 +103,7 @@
             <span class="play-menu-label">Spiel fortsetzen</span>
             <span class="play-menu-arrow" aria-hidden="true">→</span>
           </button>
+          <p id="save-warning" class="save-warning" role="status" aria-live="polite" hidden></p>
 
           <div class="new-world-box">
             <div class="world-box-heading">

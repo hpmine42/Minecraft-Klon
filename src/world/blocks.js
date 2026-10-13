@@ -302,7 +302,7 @@ reg(def(BLOCK.LADDER, 'Leiter', {
 // ---- Funktions-Blöcke -----------------------------------------------------
 reg(def(BLOCK.TORCH, 'Fackel', {
   tiles: [51, 51, 51], solid: false, transparent: true, render: RENDER.TORCH,
-  hardness: 0, light: 14,
+  hardness: 0, light: 14, equipmentSlot: 'offhand',
 }));
 reg(def(BLOCK.CRAFTING_TABLE, 'Werkbank', {
   tiles: [32, 52, 32], hardness: 2.5, tool: TOOL.AXE, flammable: true,

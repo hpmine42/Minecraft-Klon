@@ -92,7 +92,7 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 | Linksklick im Inventar | Stapel aufnehmen/ablegen; Ziehen verteilt gleichmäßig |
 | Rechtsklick im Inventar | Hälfte aufnehmen, ein Item ablegen; Ziehen verteilt einzeln |
 | Shift-Klick im Inventar | Stapel zwischen Hotbar und Hauptinventar verschieben |
-| Esc | Pause bzw. Inventar schließen |
+| Esc | Inventar schließen (Cursorstapel fällt in die Welt) bzw. Pause |
 | F | Fliegen umschalten |
 | F3 | Debug-Infos |
 | M / P | Spielmodus / Friedlich wechseln |

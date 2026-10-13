@@ -15,6 +15,7 @@ export class Input {
     this.sensitivity = 0.0022;
     this.onPause = null;
     this.onKey = null;
+    this.shouldCaptureWheel = null;
 
     this._onKeyDown = (e) => {
       if (e.repeat) return;
@@ -50,7 +51,7 @@ export class Input {
       if (e.button === 2) this.use = false;
     };
     this._onWheel = (e) => {
-      if (!this.enabled) return;
+      if (!this.enabled || (this.shouldCaptureWheel && !this.shouldCaptureWheel())) return;
       this.wheelDelta += Math.sign(e.deltaY);
       e.preventDefault();
     };
