@@ -1,5 +1,7 @@
 // storage.test.mjs — Fehlerhafte Browserdaten sicher zurückweisen, ohne gespeicherte Bytes anzutasten.
-import { defaultSettings, loadGame, loadSettings, saveGame, saveSettings } from '../src/save/storage.js';
+import {
+  defaultSettings, exportSaveData, importSaveData, loadGame, loadSettings, saveGame, saveSettings,
+} from '../src/save/storage.js';
 
 const SAVE_KEY = 'minecraft-klon-save-v1';
 const SETTINGS_KEY = 'minecraft-klon-settings-v1';
@@ -38,6 +40,41 @@ const invalidPositionSave = JSON.stringify({
 store.set(SAVE_KEY, invalidPositionSave);
 ok(loadGame() === null && store.get(SAVE_KEY) === invalidPositionSave,
   'Nicht-endliche Spielerpositionen werden zurückgewiesen und bleiben zur Wiederherstellung erhalten');
+const invalidOrientationSave = JSON.stringify({
+  ...validSave,
+  player: { ...validSave.player, yaw: 'nicht numerisch' },
+});
+store.set(SAVE_KEY, invalidOrientationSave);
+ok(loadGame() === null && store.get(SAVE_KEY) === invalidOrientationSave,
+  'Ungültige Blickdaten werden abgewiesen, ohne die Sicherungsbytes zu verändern');
+
+const backup = JSON.stringify(validSave);
+store.set(SAVE_KEY, '{"beschädigt":true}');
+ok(exportSaveData() === '{"beschädigt":true}',
+  'Der Exportzugriff bewahrt auch beschädigte Daten zur manuellen Wiederherstellung');
+ok(importSaveData(backup) && loadGame()?.seed === 0,
+  'Eine gültige JSON-Sicherung wird vollständig importiert');
+const richBackup = JSON.stringify({
+  ...validSave,
+  modified: [{ pos: '1,2,3', id: 0, meta: 0 }],
+  furnaces: [['1,10,1', { slots: [{ id: 3, count: 2 }], progress: 2, burnRemaining: 10, burnTotal: 15 }]],
+  chests: [['2,10,2', { slots: [{ id: 3, count: 4 }] }]],
+  inventoryUI: { craftingMode: 'player', craftGrid: [{ id: 3, count: 1 }], heldStack: { id: 10, count: 2 } },
+  droppedItems: [{ id: 3, count: 1, position: { x: 1, y: 11, z: 1 }, velocity: { x: 0, y: 0, z: 0 }, life: 200, pickupDelay: 0.2 }],
+});
+ok(importSaveData(richBackup) && loadGame()?.chests?.[0]?.[1]?.slots?.[0]?.count === 4,
+  'Gültige Sicherungen bewahren Weltänderungen, Container, Cursor-Items und Drops');
+const preservedBeforeInvalidImport = exportSaveData();
+ok(!importSaveData(JSON.stringify({
+  ...validSave,
+  inventory: { ...validSave.inventory, slots: [{ id: 3, count: 65 }] },
+})) && exportSaveData() === preservedBeforeInvalidImport,
+  'Ungültige Inventarstapel werden abgewiesen, ohne den bisherigen Spielstand zu ersetzen');
+ok(!importSaveData(JSON.stringify({
+  ...validSave,
+  chests: [['2,10,2', { slots: [{ id: 3, count: 65 }] }]],
+})) && exportSaveData() === preservedBeforeInvalidImport,
+  'Ungültige Containerstapel werden abgewiesen statt beim Laden abgeschnitten');
 
 store.set(SETTINGS_KEY, JSON.stringify({
   renderDistance: 99,
@@ -60,6 +97,9 @@ ok(settings.renderDistance === 10 && settings.fov === 60 && settings.volume === 
   'Geladene Einstellungen werden auf bekannte Typen und sichere Wertebereiche normalisiert');
 ok({ ...defaultSettings(false), ...settings }.sensitivity === defaultSettings(false).sensitivity,
   'Ungültige Einstellungen fallen auf geräteabhängige Standardwerte zurück');
+store.set(SETTINGS_KEY, JSON.stringify({ autosaveInterval: 125 }));
+ok(loadSettings().autosaveInterval === 130,
+  'Das gespeicherte Autosave-Intervall wird an die Slider-Schrittweite angepasst');
 store.set(SETTINGS_KEY, JSON.stringify({ reduceMotion: 'yes' }));
 ok(!('reduceMotion' in loadSettings()), 'Kamerabewegungseinstellung akzeptiert ausschließlich echte boolesche Werte');
 
@@ -77,9 +117,10 @@ const saveResult = saveGame(
   { toJSON: () => validSave.player },
   { toJSON: () => validSave.inventory },
 );
+const importResult = importSaveData(backup);
 console.warn = originalWarn;
-ok(saveResult === false && store.get(SAVE_KEY) === preservedSave,
-  'Fehlgeschlagener Storage-Write lässt den bisherigen Spielstand intakt');
+ok(saveResult === false && importResult === false && store.get(SAVE_KEY) === preservedSave,
+  'Fehlgeschlagene Speicher- und Importvorgänge lassen den bisherigen Spielstand intakt');
 
 saveSettings({ fov: 90 });
 ok(loadSettings().fov === 90, 'Gültige Einstellungen bleiben dauerhaft speicherbar');

@@ -221,6 +221,15 @@ ok(game.hud.els.heldItemView.style.display === 'block'
   && game.hud.els.heldItemIcon.style.visibility === 'visible',
 'Aktuell ausgewähltes Item wird als Pixel-Item in der Spielhand angezeigt');
 ok(!!game.mobs, 'Mob-Manager vorhanden');
+const autosaveIntervalInput = elementsById.get('setting-autosave-interval');
+ok(autosaveIntervalInput.value === 60
+  && elementsById.get('setting-autosave-interval-value').textContent === '1 min',
+'Autosave-Intervall wird verständlich angezeigt und mit dem gespeicherten Standard vorbelegt');
+game.autosaveTimer = 17;
+game.applySetting('autosaveInterval', 120);
+const autosaveIntervalApplied = game.settings.autosaveInterval === 120 && game.autosaveTimer === 0;
+game.applySetting('autosaveInterval', 60);
+ok(autosaveIntervalApplied, 'Änderungen des Autospeicher-Intervalls starten den Countdown neu');
 game.applySetting('particles', 'low');
 const lowParticleBudget = game.particles.maxParticles === 180;
 game.applySetting('particles', 'high');

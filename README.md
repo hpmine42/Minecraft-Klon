@@ -54,7 +54,7 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 - 🔨 **Crafting**: 35+ Rezepte (Werkzeuge, Fackeln, Werkbank, Ofen, Brot, Leiter …) mit Rezeptbuch
 - 🏗️ **Kreativmodus**: Fliegen, freies Bauen, Start-Ausrüstung
 - 🌙 **Friedlich-Modus** ohne Monster (Standard)
-- 💾 **Spielstände** (Speicher/Laden/Auto-Speichern) in localStorage
+- 💾 **Spielstände** in localStorage: manuelles und konfigurierbares Auto-Speichern sowie JSON-Import/Export für Sicherungen
 - 🎲 **Seeds**: gleicher Seed = gleiche Welt (auch als Text)
 - 🏗️ **Welttypen**: Normal (Berge/Höhlen) und Flach (Bauwelt)
 

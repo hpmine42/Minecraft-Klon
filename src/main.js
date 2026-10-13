@@ -23,7 +23,7 @@ import { createMenuPreview } from './ui/menu-preview.js';
 import { DebugOverlay } from './ui/debug.js';
 import { runSelfTest, renderSelfTest } from './ui/selftest.js';
 import {
-  saveGame, loadGame, hasSave, deleteSave,
+  saveGame, loadGame, hasSave, deleteSave, exportSaveData, importSaveData, MAX_SAVE_SIZE,
   saveSettings, loadSettings, defaultSettings,
 } from './save/storage.js';
 
@@ -165,11 +165,18 @@ class Game {
       'setting-reduced-motion': $('setting-reduced-motion'),
       'setting-debug': $('setting-debug'),
       'setting-autosave': $('setting-autosave'),
+      'setting-autosave-interval': $('setting-autosave-interval'),
+      'btn-export-save': $('btn-export-save'),
+      'btn-import-save': $('btn-import-save'),
+      'save-import-file': $('save-import-file'),
+      'save-backup-feedback': $('save-backup-feedback'),
     }, this.atlasCanvas, this.inventory, {
       onPlay: () => this.continueGame(),
       onNewWorld: () => this.startNewWorld(),
       onResume: () => this.resume(),
       onSave: () => this._saveWithFeedback(),
+      onExportSave: () => this.exportSaveBackup(),
+      onImportSave: (file) => this.importSaveBackup(file),
       onQuit: () => {
         if (this._saveWithFeedback()) this.quitToMenu();
       },
@@ -486,6 +493,72 @@ class Game {
     return saved;
   }
 
+  _setSaveBackupFeedback(message, isError = false) {
+    const feedback = $('save-backup-feedback');
+    if (!feedback) return;
+    feedback.textContent = message;
+    feedback.classList.toggle('error', isError);
+  }
+
+  exportSaveBackup() {
+    const raw = exportSaveData();
+    if (!raw) {
+      this._setSaveBackupFeedback('Kein Spielstand zum Sichern vorhanden.', true);
+      return false;
+    }
+    let objectUrl = null;
+    try {
+      const blob = new Blob([raw], { type: 'application/json' });
+      objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      link.href = objectUrl;
+      link.download = `minecraft-klon-sicherung-${stamp}.json`;
+      link.hidden = true;
+      document.body.appendChild(link);
+      link.click();
+      link.remove?.();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      this._setSaveBackupFeedback('Sicherung heruntergeladen. Bewahre die Datei an einem sicheren Ort auf.');
+      return true;
+    } catch {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      this._setSaveBackupFeedback('Download fehlgeschlagen. Dein Spielstand auf diesem Gerät bleibt erhalten.', true);
+      return false;
+    }
+  }
+
+  async importSaveBackup(file) {
+    if (!file || typeof file.text !== 'function') {
+      this._setSaveBackupFeedback('Die ausgewählte Datei konnte nicht gelesen werden.', true);
+      return false;
+    }
+    if (hasSave() && (typeof window.confirm !== 'function'
+        || !window.confirm('Die Sicherung ersetzt den Spielstand auf diesem Gerät. Vorher ggf. herunterladen. Fortfahren?'))) {
+      this._setSaveBackupFeedback('Import abgebrochen. Der vorhandene Spielstand bleibt erhalten.');
+      return false;
+    }
+    try {
+      if (Number.isFinite(file.size) && file.size > MAX_SAVE_SIZE) {
+        this._setSaveBackupFeedback('Die Sicherungsdatei ist zu groß (maximal 8 MB).', true);
+        return false;
+      }
+      const raw = await file.text();
+      if (!importSaveData(raw)) {
+        this._setSaveBackupFeedback('Sicherung ungültig oder Speicher voll. Der bisherige Spielstand bleibt erhalten.', true);
+        return false;
+      }
+      this.menus.setHasSave(true);
+      const warning = $('save-warning');
+      if (warning) warning.hidden = true;
+      this._setSaveBackupFeedback('Sicherung importiert. Wähle „Spiel fortsetzen“, um diese Welt zu laden.');
+      return true;
+    } catch {
+      this._setSaveBackupFeedback('Datei konnte nicht gelesen werden. Der bisherige Spielstand bleibt erhalten.', true);
+      return false;
+    }
+  }
+
   saveNow() {
     if (!this.world || !this.player || this.state === 'menu') return false;
     const ok = saveGame(this.world, this.player, this.inventory, {
@@ -747,6 +820,10 @@ class Game {
         break;
       case 'particles':
         this.particles?.setQuality(value);
+        break;
+      case 'autosave':
+      case 'autosaveInterval':
+        this.autosaveTimer = 0;
         break;
       case 'reduceMotion':
         if (value) this.engine.updateFov(false, 0.25);

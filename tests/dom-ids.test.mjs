@@ -74,9 +74,10 @@ if (!mainMenuMarkup.includes('id="btn-fullscreen-menu"')) {
 // Einstellungen
 const settingIds = [
   'setting-render-distance', 'setting-fov', 'setting-sensitivity',
-  'setting-volume', 'setting-day-length', 'setting-particles',
+  'setting-volume', 'setting-day-length', 'setting-autosave-interval', 'setting-particles',
   'setting-invert-y', 'setting-reduced-motion', 'setting-debug', 'setting-autosave',
   'btn-reset-world', 'btn-delete-save', 'btn-settings-back',
+  'btn-export-save', 'btn-import-save', 'save-import-file', 'save-backup-feedback',
 ];
 for (const id of settingIds) {
   if (!htmlIds.has(id)) {
@@ -88,7 +89,7 @@ for (const id of settingIds) {
 // Slider-Werte müssen direkt neben ihrer Beschriftung stehen, nicht als lose Flex-Elemente darunter.
 const settingsValueIds = [
   'setting-render-distance-value', 'setting-fov-value', 'setting-sensitivity-value',
-  'setting-volume-value', 'setting-day-length-value',
+  'setting-volume-value', 'setting-day-length-value', 'setting-autosave-interval-value',
 ];
 for (const id of settingsValueIds) {
   const valuePosition = html.indexOf(`id="${id}"`);

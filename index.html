@@ -153,6 +153,19 @@
               <span class="utility-icon" aria-hidden="true">⛶</span><span><strong>Vollbild</strong><small>Bildschirm füllen</small></span>
             </button>
           </div>
+
+          <section class="save-backup-tools" aria-labelledby="save-backup-title">
+            <div class="save-backup-copy">
+              <h2 id="save-backup-title">Spielstand sichern</h2>
+              <p>Lade eine Kopie herunter oder stelle eine JSON-Sicherung wieder her.</p>
+            </div>
+            <div class="save-backup-actions">
+              <button id="btn-export-save" class="menu-btn" type="button" disabled>↓ Sicherung herunterladen</button>
+              <button id="btn-import-save" class="menu-btn" type="button">↑ Sicherung importieren</button>
+              <input id="save-import-file" type="file" accept=".json,application/json" aria-label="JSON-Spielstand auswählen" hidden>
+            </div>
+            <p id="save-backup-feedback" class="save-backup-feedback" role="status" aria-live="polite"></p>
+          </section>
         </section>
 
         <p class="hint"><span aria-hidden="true">✦</span> Öffne das Spiel auf Handy oder Computer – die Steuerung passt sich automatisch an.</p>
@@ -249,6 +262,11 @@
               <label class="setting-toggle">
                 <input id="setting-autosave" type="checkbox" checked>
                 <span class="setting-toggle-copy"><strong>Automatisch speichern</strong><small>Spielstand regelmäßig sichern.</small></span>
+              </label>
+              <label class="setting-control">
+                <span class="setting-title-row"><span>Speicherintervall</span><span id="setting-autosave-interval-value" class="val"></span></span>
+                <input id="setting-autosave-interval" type="range" min="10" max="3600" step="10">
+                <span class="setting-help">Alle 10 Sekunden bis 60 Minuten; gilt nur bei aktiviertem Autospeichern.</span>
               </label>
             </div>
           </section>
