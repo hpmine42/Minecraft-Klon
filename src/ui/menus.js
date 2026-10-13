@@ -129,6 +129,7 @@ export class Menus {
     if (this.craftGridEl) {
       this.craftGridEl.classList.toggle('player-craft-grid', size === 4);
     }
+    this.playerSidePanel?.classList.toggle('workbench-mode', size === 9);
     for (let i = 0; i < (this.craftSlotEls?.length || 0); i++) {
       this.craftSlotEls[i].el.style.display = i < size ? '' : 'none';
     }
@@ -401,15 +402,36 @@ export class Menus {
     craftArea.appendChild(resultSlot.el);
     craftWrap.appendChild(craftArea);
 
-    // Rezeptbuch
+    // Rezeptbuch; auf schmalen Bildschirmen eingeklappt, damit das Inventar passt.
     const book = document.createElement('div');
     book.className = 'recipe-book';
-    const bookLabel = document.createElement('div');
-    bookLabel.className = 'craft-label';
-    bookLabel.textContent = 'Rezeptbuch';
-    book.appendChild(bookLabel);
+    const bookToggle = document.createElement('button');
+    bookToggle.type = 'button';
+    bookToggle.className = 'recipe-book-toggle';
+    bookToggle.textContent = 'Rezeptbuch';
     const bookList = document.createElement('div');
+    bookList.id = 'inventory-recipe-list';
     bookList.className = 'recipe-list';
+    bookToggle.setAttribute('aria-controls', bookList.id);
+    let recipeBookExpanded = typeof window === 'undefined'
+      || (window.innerWidth > 640 && window.innerHeight > 520);
+    const renderRecipeBook = () => {
+      book.classList.toggle('collapsed', !recipeBookExpanded);
+      bookToggle.setAttribute('aria-expanded', String(recipeBookExpanded));
+      bookList.style.display = recipeBookExpanded ? '' : 'none';
+    };
+    bookToggle.addEventListener('click', () => {
+      recipeBookExpanded = !recipeBookExpanded;
+      renderRecipeBook();
+    });
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', () => {
+        recipeBookExpanded = window.innerWidth > 640 && window.innerHeight > 520;
+        renderRecipeBook();
+      });
+    }
+    renderRecipeBook();
+    book.appendChild(bookToggle);
     for (const recipe of this.recipeList) {
       const row = document.createElement('div');
       row.className = 'recipe-row';
@@ -429,6 +451,8 @@ export class Menus {
     }
     book.appendChild(bookList);
     this.recipeBook = book;
+    this.recipeBookToggle = bookToggle;
+    this.recipeListEl = bookList;
 
     // Ofen: Ein-/Brennstoff-/Ausgabe-Slots plus animierte Statusbalken.
     const furnacePanel = document.createElement('section');
@@ -586,7 +610,7 @@ export class Menus {
     invWrap.className = 'inv-wrap';
     const invLabel = document.createElement('div');
     invLabel.className = 'craft-label';
-    invLabel.textContent = 'Inventar (antippen oder ziehen zum Aufnehmen/Ablegen)';
+    invLabel.textContent = 'Inventar';
     invWrap.appendChild(invLabel);
 
     this.invSlotEls = [];

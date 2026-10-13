@@ -316,7 +316,14 @@ game._updatePlaying = playingUpdate;
 ok(inventoryWorldTicks > 0, 'Welt, Spielerphysik und Mobs laufen auch bei offenem Inventar weiter');
 ok(game.menus.transferControls.parentElement === game.menus.els['inventory-body']
   && game.menus.els['inventory-body'].children[0] === game.menus.transferControls,
-'Einzel-Item-Schalter sitzt sichtbar am Anfang des Inventars');
+  'Einzel-Item-Schalter sitzt sichtbar am Anfang des Inventars');
+ok(game.menus.recipeListEl.style.display === 'none',
+'Rezeptliste ist mobil zunächst eingeklappt, damit das Inventar ohne Scrollen passt');
+game.menus.recipeBookToggle.dispatch('click', makeEvent([]));
+const recipeBookExpanded = game.menus.recipeListEl.style.display !== 'none';
+game.menus.recipeBookToggle.dispatch('click', makeEvent([]));
+ok(recipeBookExpanded && game.menus.recipeListEl.style.display === 'none',
+'Rezeptbuch lässt sich bei Bedarf öffnen und wieder platzsparend schließen');
 
 // Item mit einem Finger aus dem Inventar direkt ins 2×2-Spielercraftingfeld ziehen.
 game.inventory.slots[9] = { id: BLOCK.LOG, count: 1, dur: null };
