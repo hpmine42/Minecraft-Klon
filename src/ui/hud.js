@@ -11,6 +11,8 @@ export class HUD {
     this.lastSelected = -1;
     this.lastCounts = [];
     this.nameToastTimer = 0;
+    this.gameplayActive = false;
+    this.heldItemSignature = null;
     this.fpsHistory = [];
     this.fps = 0;
 
@@ -99,7 +101,37 @@ export class HUD {
     this.nameToastTimer = 2.2;
   }
 
-  update(dt, player) {
+  setGameplayActive(active) {
+    this.gameplayActive = !!active;
+    this._refreshHeldItem();
+  }
+
+  _refreshHeldItem() {
+    const view = this.els.heldItemView;
+    const canvas = this.els.heldItemIcon;
+    if (!view || !canvas) return;
+    const stack = this.inventory.held();
+    const visible = this.gameplayActive && !!stack;
+    view.style.display = visible ? 'block' : 'none';
+    if (!visible) return;
+
+    const signature = `${stack.id}:${stack.count}:${stack.dur ?? ''}`;
+    if (signature === this.heldItemSignature) return;
+    this.heldItemSignature = signature;
+    const def = BLOCKS[stack.id];
+    if (def?.tiles?.length) {
+      drawTileIcon(canvas, def.tiles[0], this.atlas);
+      canvas.style.visibility = 'visible';
+    } else {
+      const context = canvas.getContext('2d');
+      context?.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.style.visibility = 'hidden';
+    }
+  }
+
+  update(dt, player, gameplayActive = this.gameplayActive) {
+    this.gameplayActive = !!gameplayActive;
+    this._refreshHeldItem();
     // Name-Toast ausblenden
     if (this.nameToastTimer > 0) {
       this.nameToastTimer -= dt;

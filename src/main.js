@@ -70,6 +70,7 @@ class Game {
 
     this.input = new Input(this.canvas);
     this.input.sensitivity = this.settings.sensitivity;
+    this.input.shouldCaptureWheel = () => this.state === 'playing';
     this.input.onPause = () => {
       // Pointer-Lock verloren → Pause öffnen (nur wenn gerade gespielt wird)
       if (this.state === 'playing' && !this.isTouch) this.pause();
@@ -95,6 +96,8 @@ class Game {
 
     this.hud = new HUD({
       hotbar: $('hotbar'),
+      heldItemView: $('held-item-view'),
+      heldItemIcon: $('held-item-icon'),
       hearts: $('hearts'),
       hunger: $('hunger'),
       air: $('air'),
@@ -462,6 +465,7 @@ class Game {
 
   quitToMenu() {
     this.state = 'menu';
+    this.hud.setGameplayActive(false);
     this.menuPreview?.setVisible(!this.world);
     if (this.input.locked) this.input.unlock();
     this.menus.showScreen('main-menu');
@@ -475,6 +479,7 @@ class Game {
     this.player.respawn(spawn);
     this.touch?.setSneak(false);
     this.state = 'playing';
+    this.hud.setGameplayActive(true);
     this.menus.hideAll();
     if (!this.isTouch) this.input.lock();
     this.toast('Wiederbelebt!');
@@ -535,6 +540,7 @@ class Game {
   pause() {
     if (this.state !== 'playing') return;
     this.state = 'paused';
+    this.hud.setGameplayActive(false);
     if (this.input.locked) this.input.unlock();
     this.menus.showScreen('pause-menu');
     this.saveNow();
@@ -543,6 +549,7 @@ class Game {
   resume() {
     if (this.state !== 'paused') return;
     this.state = 'playing';
+    this.hud.setGameplayActive(true);
     this.menus.hideAll();
     if (!this.isTouch) this.input.lock();
   }
@@ -550,6 +557,7 @@ class Game {
   openInventory() {
     if (this.state !== 'playing') return;
     this.state = 'inventory';
+    this.hud.setGameplayActive(false);
     if (this.input.locked) this.input.unlock();
     this.menus.openPlayerInventory();
   }
@@ -557,6 +565,7 @@ class Game {
   openWorkbenchInventory() {
     if (this.state !== 'playing') return;
     this.state = 'inventory';
+    this.hud.setGameplayActive(false);
     if (this.input.locked) this.input.unlock();
     this.menus.openWorkbenchInventory();
   }
@@ -570,6 +579,7 @@ class Game {
       this.world.furnaces.set(key, state);
     }
     this.state = 'inventory';
+    this.hud.setGameplayActive(false);
     if (this.input.locked) this.input.unlock();
     this.menus.openFurnace(state);
   }
@@ -583,6 +593,7 @@ class Game {
       this.world.chests.set(key, state);
     }
     this.state = 'inventory';
+    this.hud.setGameplayActive(false);
     if (this.input.locked) this.input.unlock();
     this.menus.openChest(state);
   }
@@ -595,7 +606,7 @@ class Game {
     this.menus.hideAll();
     if (!this.isTouch) this.input.lock();
     // Hotbar-Update erzwingen
-    this.hud.update(0, this.player);
+    this.hud.update(0, this.player, true);
     this.hud._lastSig = null;
   }
 
@@ -1088,7 +1099,7 @@ class Game {
     this.engine.camera.rotation.set(player.pitch, player.yaw, 0);
 
     // ---- HUD -----------------------------------------------------------------
-    this.hud.update(dt, player);
+    this.hud.update(dt, player, this.state === 'playing');
     this.hud.updateFPS(dt);
     this.hud.setBreakProgress(this.interaction.breakFraction);
     this.hud.setGamemodeLabel(player.gamemode, player.peaceful);
@@ -1148,13 +1159,14 @@ class Game {
 
   _dropItems(id, count, stack = null) {
     // Nicht passende Cursor-/Crafting-Reste bleiben als ItemEntity in der Welt.
-    if (!this.mobs) return;
+    if (!this.mobs) return false;
     const p = this.player.position;
     const dir = this.player.lookDir();
     const drop = { id, count };
     if (stack?.dur != null) drop.dur = stack.dur;
     if (stack?.meta != null) drop.meta = stack.meta;
     this.mobs.spawnDrops(p.x + dir.x, p.y + 0.5, p.z + dir.z, [drop]);
+    return true;
   }
 
   toast(text) {

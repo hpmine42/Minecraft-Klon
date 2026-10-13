@@ -81,7 +81,10 @@ const elementsById = new Map();
 function makeElement(id) {
   const el = {
     id,
-    style: new Proxy({}, { get: () => '', set: () => true }),
+    style: new Proxy({}, {
+      get(target, property) { return target[property] ?? ''; },
+      set(target, property, value) { target[property] = value; return true; },
+    }),
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
     children: [],
     dataset: {},
@@ -210,6 +213,10 @@ ok(!game.menuPreview.root.visible, 'Menü-Diorama wird beim Weltstart ausgeblend
 await new Promise((r) => setTimeout(r, 500));
 ok(game.state === 'playing', `Zustand nach Start: ${game.state}`);
 ok(!!game.world && game.world.chunks.size > 0, `Welt generiert (${game.world ? game.world.chunks.size : 0} Chunks)`);
+game.hud.update(0, game.player, true);
+ok(game.hud.els.heldItemView.style.display === 'block'
+  && game.hud.els.heldItemIcon.style.visibility === 'visible',
+'Aktuell ausgewähltes Item wird als Pixel-Item in der Spielhand angezeigt');
 ok(!!game.mobs, 'Mob-Manager vorhanden');
 ok(!!game.interaction, 'Interaktion vorhanden');
 ok(game.player.position.y > 0, `Spieler positioniert (y=${game.player.position.y.toFixed(1)})`);
@@ -262,10 +269,20 @@ ok(game.state === 'playing', 'Resume funktioniert');
   ok(true, 'Platzieren ohne Fehler');
 }
 
-// Inventar öffnen/schließen und temporäre Cursor-/Craftingstapel sicher zurückgeben.
-game.openInventory();
-ok(game.state === 'inventory', 'Inventar öffnet');
+// Inventar öffnen/schließen und temporäre Cursor-/Craftingstapel sicher verwalten.
+game._onKey({ code: 'KeyE', repeat: false });
+ok(game.state === 'inventory', 'Taste E öffnet das Spielerinventar');
+ok(game.hud.els.heldItemView.style.display === 'none',
+'Spielhand-Item wird während des offenen Inventars ausgeblendet');
+const wheelBeforeInventory = game.input.wheelDelta;
+let inventoryWheelPrevented = false;
+game.input._onWheel({ deltaY: 1, preventDefault() { inventoryWheelPrevented = true; } });
+ok(!inventoryWheelPrevented && game.input.wheelDelta === wheelBeforeInventory,
+'Inventar-Mausrad bleibt für das Scrollen der Oberfläche frei');
 game.inventory.setEquipment('offhand', { id: BLOCK.TORCH, count: 3, dur: null });
+game.menus.refreshInventory();
+ok(game.menus._characterItemIcons?.has(BLOCK.TORCH),
+'Charaktervorschau wird bei ausgerüsteten, definierten Items aktualisiert');
 game.menus.craftGrid[0] = { id: BLOCK.LOG, count: 1, dur: null };
 game.menus.heldStack = { id: BLOCK.SAND, count: 2, dur: null };
 const openInventorySave = game.saveNow();
@@ -273,9 +290,32 @@ const openInventoryData = JSON.parse(localStorage.getItem('minecraft-klon-save-v
 ok(openInventorySave && openInventoryData.inventoryUI.craftGrid[0]?.id === BLOCK.LOG
   && openInventoryData.inventoryUI.heldStack?.count === 2,
 'Autospeicher-Snapshot bewahrt auch Cursor- und Craftingstapel');
-game.closeInventory();
-ok(game.state === 'playing' && game.inventory.count(BLOCK.LOG) >= 1 && game.inventory.count(BLOCK.SAND) >= 2,
-'Inventar schließt und gibt unverarbeitete Stacks zurück');
+const sandBeforeClose = game.inventory.count(BLOCK.SAND);
+const worldDropsBeforeClose = game.mobs.items.length;
+game._onKey({ code: 'Escape', repeat: false });
+const cursorDropOnClose = game.mobs.items.slice(worldDropsBeforeClose)
+  .some((item) => item.itemId === BLOCK.SAND && item.count === 2);
+ok(game.state === 'playing' && game.inventory.count(BLOCK.LOG) >= 1
+  && game.inventory.count(BLOCK.SAND) === sandBeforeClose && cursorDropOnClose,
+'Inventar schließt, Craftingzutaten kehren zurück und Cursorstapel wird in die Welt geworfen');
+game.inventory.selected = 8;
+let gameplayWheelPrevented = false;
+game.input._onWheel({ deltaY: 1, preventDefault() { gameplayWheelPrevented = true; } });
+game._updatePlaying(0.001);
+ok(gameplayWheelPrevented && game.inventory.selected === 0,
+'Mausrad wechselt im Spiel durch die Hotbar und läuft am Ende herum');
+const selectedHotbarSlots = [];
+for (let digit = 1; digit <= 9; digit++) {
+  game._onKey({ code: `Digit${digit}`, repeat: false });
+  selectedHotbarSlots.push(game.inventory.selected);
+}
+ok(selectedHotbarSlots.join(',') === '0,1,2,3,4,5,6,7,8',
+'Tasten 1 bis 9 wählen die neun gemeinsamen Hotbar-Slots aus');
+game._onKey({ code: 'KeyE', repeat: false });
+const eOpenedInventory = game.state === 'inventory';
+game._onKey({ code: 'KeyE', repeat: false });
+ok(eOpenedInventory && game.state === 'playing',
+'Ein erneuter Druck auf E schließt das Inventar wieder');
 
 // Speichern / Laden inklusive positionierter Ofen- und Truheninhalte
 game.world.furnaces.set('10,20,30', createFurnaceState({

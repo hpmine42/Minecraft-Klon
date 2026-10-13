@@ -32,6 +32,18 @@ inv2.add(BLOCK.WOOD_PICKAXE, 1);
 ok(inv2.count(BLOCK.WOOD_PICKAXE) === 2, 'Zwei Pickaxes im Inventar');
 ok(inv2.slots[0].id === BLOCK.WOOD_PICKAXE && inv2.slots[1].id === BLOCK.WOOD_PICKAXE, 'In eigenen Slots');
 ok(inv2.slots[0].dur === 60, 'Haltbarkeit voll');
+const oldBoneStackLimit = BLOCKS[BLOCK.BONE].maxStack;
+BLOCKS[BLOCK.BONE].maxStack = 16;
+const stackLimitInventory = new Inventory(3);
+const stackLimitRemainder = stackLimitInventory.add(BLOCK.BONE, 20);
+ok(stackLimitRemainder === 0 && stackLimitInventory.getSlot(0)?.count === 16
+  && stackLimitInventory.getSlot(1)?.count === 4,
+'Konfigurierbare 16er-Stapel werden ohne Überlauf oder Itemverlust verteilt');
+const rejectedOversizedSlot = new Inventory(1);
+ok(!rejectedOversizedSlot.setSlot(0, { id: BLOCK.BONE, count: 17 })
+  && rejectedOversizedSlot.getSlot(0) === null,
+'Ein einzelner Slot weist Stapel oberhalb seines Limits ohne Abschneiden zurück');
+BLOCKS[BLOCK.BONE].maxStack = oldBoneStackLimit;
 
 // Haltbarkeit
 inv2.selected = 0;
@@ -254,8 +266,9 @@ inv5.fromJSON(json);
 ok(inv5.count(BLOCK.DIAMOND) === 12, 'Inventar-Serialisierung (Items)');
 ok(inv5.count(BLOCK.IRON_PICKAXE) === 1, 'Inventar-Serialisierung (Werkzeug)');
 ok(EQUIPMENT_SLOTS.includes('offhand') && canEquipItem(makeStack(BLOCK.TORCH, 2), 'offhand')
+  && !canEquipItem(makeStack(BLOCK.BREAD), 'offhand')
   && !canEquipItem(makeStack(BLOCK.IRON_PICKAXE), 'head'),
-'Nebenhand nutzt existierende Items; nicht definierte Rüstungsitems werden nicht erfunden');
+'Nebenhand und Rüstung akzeptieren nur laut existierender Itemdefinition passende Items');
 ok(inv4.setEquipment('offhand', makeStack(BLOCK.TORCH, 3))
   && !inv4.setEquipment('head', makeStack(BLOCK.IRON_PICKAXE)),
 'Nebenhand ist ein nutzbarer persistenter Slot, Rüstungsslots bleiben definitionsgebunden');
