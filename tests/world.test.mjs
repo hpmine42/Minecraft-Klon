@@ -53,11 +53,30 @@ const atlas = generateAtlasData(1337);
 ok(atlas.size === ATLAS_SIZE, 'Atlas-Größe');
 ok(atlas.pixels.length === ATLAS_SIZE * ATLAS_SIZE * 4, 'Atlas-Pixel');
 ok(atlas.pixels.some((x) => x > 0), 'Atlas hat Inhalt');
+const repeatedAtlas = generateAtlasData(1337);
+const alternateAtlas = generateAtlasData(1338);
+ok(atlas.pixels.every((value, index) => value === repeatedAtlas.pixels[index]),
+  'Pixel-Art-Atlas bleibt für denselben Seed reproduzierbar');
+ok(atlas.pixels.some((value, index) => value !== alternateAtlas.pixels[index]),
+  'Texturdetails variieren deterministisch mit dem Atlas-Seed');
 const atlasPixel = (tile, x, y) => {
   const ax = (tile % ATLAS_COLS) * TILE_SIZE + x;
   const ay = Math.floor(tile / ATLAS_COLS) * TILE_SIZE + y;
   return (ay * ATLAS_SIZE + ax) * 4;
 };
+const sameTilePixels = (a, b) => {
+  for (let y = 0; y < TILE_SIZE; y++) {
+    for (let x = 0; x < TILE_SIZE; x++) {
+      const ai = atlasPixel(a, x, y);
+      const bi = atlasPixel(b, x, y);
+      for (let channel = 0; channel < 4; channel++) {
+        if (atlas.pixels[ai + channel] !== atlas.pixels[bi + channel]) return false;
+      }
+    }
+  }
+  return true;
+};
+ok(!sameTilePixels(4, 47), 'Moosiges Bruchsteinmuster ist sichtbar vom normalen Bruchstein unterscheidbar');
 ok(atlas.pixels[atlasPixel(35, 0, 0) + 3] === 0, 'Blumen-Textur hat transparenten Hintergrund');
 ok(atlas.pixels[atlasPixel(35, 7, 10) + 3] === 255, 'Blumen-Stiel ist sichtbar/undurchsichtig');
 ok(atlas.pixels[atlasPixel(37, 0, 0) + 3] === 0, 'Gras-Textur hat transparenten Hintergrund');

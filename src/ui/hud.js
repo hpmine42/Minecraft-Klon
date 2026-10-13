@@ -1,7 +1,17 @@
 // hud.js — HUD: Hotbar, Herzen, Hunger, Luftblasen, Zielblock-Fortschritt, FPS.
-import { BLOCKS, BLOCK, getName } from '../world/blocks.js';
+import { BLOCKS, BLOCK, getName, isPlaceable } from '../world/blocks.js';
 import { drawTileIcon } from '../world/textures.js';
 import { markTouchEvent, wasRecentTouch } from '../core/touch.js';
+
+/** Weltzeit: 00:00 am Sonnenaufgang, 12:00 zur Mittagszeit. */
+export function formatWorldClock(timeOfDay) {
+  if (!Number.isFinite(timeOfDay)) return '--:--';
+  const dayFraction = ((timeOfDay + 0.25) % 1 + 1) % 1;
+  const totalMinutes = Math.floor(dayFraction * 24 * 60);
+  const hours = Math.floor(totalMinutes / 60) % 24;
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
 
 export class HUD {
   constructor(elements, atlasCanvas, inventory) {
@@ -12,7 +22,10 @@ export class HUD {
     this.lastCounts = [];
     this.nameToastTimer = 0;
     this.gameplayActive = false;
+    this.hidden = false;
     this.heldItemSignature = null;
+    this.targetHintSignature = null;
+    this.worldStatusSignature = null;
     this.fpsHistory = [];
     this.fps = 0;
 
@@ -103,7 +116,65 @@ export class HUD {
 
   setGameplayActive(active) {
     this.gameplayActive = !!active;
+    if (!this.gameplayActive) this.setTargetHint(null);
     this._refreshHeldItem();
+  }
+
+  /** Screenshot-/Lesemodus: HUD vollständig ausblenden, ohne den Spielzustand zu ändern. */
+  setHidden(hidden) {
+    this.hidden = !!hidden;
+    const root = this.els.root;
+    if (root) root.style.display = this.hidden ? 'none' : '';
+    return this.hidden;
+  }
+
+  /** Kontext-Hinweis am Fadenkreuz; nur bei tatsächlich anvisierten Blöcken sichtbar. */
+  setTargetHint(target, player, touch = false) {
+    const el = this.els.targetHint;
+    if (!el) return;
+    if (!this.gameplayActive || !target || !BLOCKS[target.id] || !player) {
+      if (this.targetHintSignature !== '') {
+        this.targetHintSignature = '';
+        el.textContent = '';
+        el.style.display = 'none';
+      }
+      return;
+    }
+
+    const held = this.inventory.held();
+    const heldDef = held ? BLOCKS[held.id] : null;
+    const opensContainer = [BLOCK.CRAFTING_TABLE, BLOCK.FURNACE, BLOCK.CHEST].includes(target.id);
+    let action;
+    if (opensContainer) action = touch ? '▣ öffnen' : 'Rechtsklick öffnen';
+    else if (heldDef?.food > 0 && player.gamemode === 'survival' && player.hunger < player.maxHunger) {
+      action = touch ? '▣ essen' : 'Rechtsklick essen';
+    } else if (held && isPlaceable(held.id)) action = touch ? '▣ platzieren' : 'Rechtsklick platzieren';
+    else action = touch ? '⛏ abbauen' : 'Linksklick abbauen';
+
+    const label = `${getName(target.id)} · ${action}`;
+    if (label === this.targetHintSignature) return;
+    this.targetHintSignature = label;
+    el.textContent = label;
+    el.style.display = 'block';
+  }
+
+  /** Kompakte Orientierungshilfe für Region, Uhrzeit, Wetter und Höhe. */
+  setWorldStatus({ biome, timeOfDay, weather, y } = {}) {
+    const el = this.els.worldStatus;
+    if (!el) return;
+    if (!biome) {
+      this.worldStatusSignature = '';
+      el.textContent = '';
+      el.style.display = 'none';
+      return;
+    }
+    const hour = Number(formatWorldClock(timeOfDay).slice(0, 2));
+    const sky = weather === 'rain' ? '🌧 Regen' : (hour >= 6 && hour < 18 ? '☀ Klar' : '☾ Klar');
+    const label = `${biome} · ${formatWorldClock(timeOfDay)} · ${sky} · Y ${Math.floor(y)}`;
+    if (label === this.worldStatusSignature) return;
+    this.worldStatusSignature = label;
+    el.textContent = label;
+    el.style.display = 'block';
   }
 
   _refreshHeldItem() {

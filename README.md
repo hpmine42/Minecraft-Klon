@@ -54,7 +54,7 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 - 🔨 **Crafting**: 35+ Rezepte (Werkzeuge, Fackeln, Werkbank, Ofen, Brot, Leiter …) mit Rezeptbuch
 - 🏗️ **Kreativmodus**: Fliegen, freies Bauen, Start-Ausrüstung
 - 🌙 **Friedlich-Modus** ohne Monster (Standard)
-- 💾 **Spielstände** (Speicher/Laden/Auto-Speichern) in localStorage
+- 💾 **Spielstände** in localStorage: manuelles und konfigurierbares Auto-Speichern sowie JSON-Import/Export für Sicherungen
 - 🎲 **Seeds**: gleicher Seed = gleiche Welt (auch als Text)
 - 🏗️ **Welttypen**: Normal (Berge/Höhlen) und Flach (Bauwelt)
 
@@ -65,10 +65,12 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 - 🖥️ **Desktop-Steuerung**: WASD, Maus mit Pointer-Lock, Tastenkürzel (siehe Hilfe)
 - 🔊 **Prozedurale Sounds** (WebAudio) – ohne Audiodateien: Abbauen, Schritte,
   Sprünge, Tiere, Zombies, Regen, Essen, Crafting …
-- 🎨 **Pixel-Art-Texturen** werden prozedural zur Laufzeit erzeugt (kein Asset-Pack nötig)
+- 🎨 **Detaillierte Pixel-Art-Texturen**: prozedurale, seedbare Stein-, Erz-, Holz-, Sand- und Wassermuster (kein Asset-Pack nötig)
 - 🧊 Ambient Occlusion & Schattierung für Tiefe
 - ⚡ Performance: Chunk-Meshing mit Zeitbudget, geräteabhängige Renderdistanz,
   Pixel-Ratio-Limit, frustum culling
+- 🧭 **Erkundungs-HUD**: aktuelles Biom, Weltzeit, Wetter und Höhe; am Zielblock erscheinen passende Bedienhinweise
+- 🧘 **Kamerabewegung reduzieren**: schaltet Kopf-Bobbing und Sprint-FOV-Kick aus
 - 🔍 **Debug-Screen** (F3): FPS, Position, Biome, Chunk-Statistiken
 - 🩺 **Selbstdiagnose** im Hauptmenü: prüft WebGL, Storage, Eingabe, Weltlogik,
   Performance – ideal zum Testen **auf dem Handy**
@@ -94,6 +96,7 @@ Rechner, z. B. `http://192.168.x.x:8080`). Die Touch-Steuerung erscheint automat
 | Shift-Klick im Inventar | Stapel zwischen Hotbar und Hauptinventar verschieben |
 | Esc | Inventar schließen (Cursorstapel fällt in die Welt) bzw. Pause |
 | F | Fliegen umschalten |
+| F1 | HUD für Screenshots aus-/einblenden |
 | F3 | Debug-Infos |
 | M / P | Spielmodus / Friedlich wechseln |
 | T / O | Zeit springen / Wetter umschalten |

@@ -1,6 +1,7 @@
 // debug.js — F3-Debug-Overlay.
 import { BIOME_NAMES } from '../world/worldgen.js';
 import { getName, BLOCKS } from '../world/blocks.js';
+import { formatWorldClock } from './hud.js';
 
 export class DebugOverlay {
   constructor(element) {
@@ -44,9 +45,7 @@ export class DebugOverlay {
       lines.push(`Ziel: ${getName(target.id)} @ ${target.x},${target.y},${target.z}`);
     }
     if (extra.time !== undefined) {
-      const hours = Math.floor(extra.time * 24);
-      const mins = Math.floor((extra.time * 24 - hours) * 60);
-      lines.push(`Zeit: ${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}  Wetter: ${extra.weather === 'rain' ? 'Regen' : 'Klar'}`);
+      lines.push(`Zeit: ${formatWorldClock(extra.time)}  Wetter: ${extra.weather === 'rain' ? 'Regen' : 'Klar'}`);
     }
     if (extra.device) {
       lines.push(extra.device);

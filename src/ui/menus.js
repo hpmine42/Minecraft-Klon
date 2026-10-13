@@ -213,6 +213,39 @@ export class Menus {
     click('btn-open-settings', () => this.showScreen('settings-screen'));
     click('btn-settings-back', () => this.showScreen(this._settingsFrom || 'main-menu'));
     click('btn-save', () => this.cb.onSave && this.cb.onSave());
+    click('btn-export-save', () => this.cb.onExportSave && this.cb.onExportSave());
+    click('btn-import-save', () => {
+      const fileInput = this._el('save-import-file');
+      if (fileInput) fileInput.click();
+    });
+    const saveFileInput = this._el('save-import-file');
+    if (saveFileInput) {
+      saveFileInput.addEventListener('change', () => {
+        const file = saveFileInput.files?.[0];
+        if (!file || !this.cb.onImportSave) {
+          saveFileInput.value = '';
+          return;
+        }
+        const playButton = this._el('btn-play');
+        const newWorldButton = this._el('btn-new-world');
+        const importButton = this._el('btn-import-save');
+        const playWasDisabled = playButton?.disabled;
+        const newWorldWasDisabled = newWorldButton?.disabled;
+        if (playButton) playButton.disabled = true;
+        if (newWorldButton) newWorldButton.disabled = true;
+        if (importButton) importButton.disabled = true;
+        Promise.resolve().then(() => this.cb.onImportSave(file)).then((imported) => {
+          if (imported) this.setHasSave(true);
+          else if (playButton) playButton.disabled = playWasDisabled;
+        }).catch(() => {
+          if (playButton) playButton.disabled = playWasDisabled;
+        }).finally(() => {
+          if (newWorldButton) newWorldButton.disabled = newWorldWasDisabled;
+          if (importButton) importButton.disabled = false;
+          saveFileInput.value = '';
+        });
+      });
+    }
     click('btn-quit', () => this.cb.onQuit && this.cb.onQuit());
     click('btn-respawn', () => this.cb.onRespawn && this.cb.onRespawn());
     click('btn-help', () => this.showScreen('help-screen'));
@@ -244,6 +277,13 @@ export class Menus {
       if (v <= 0) return 'Aus';
       return `${Math.round(v)} s`;
     });
+    bindRange('setting-autosave-interval', 'autosaveInterval', (v) => {
+      const seconds = Math.round(v);
+      if (seconds < 60) return `${seconds} s`;
+      const minutes = Math.floor(seconds / 60);
+      const remainder = seconds % 60;
+      return remainder ? `${minutes} min ${remainder} s` : `${minutes} min`;
+    });
 
     const bindSelect = (id, key) => {
       const el = this._el(id);
@@ -262,6 +302,7 @@ export class Menus {
       });
     };
     bindCheck('setting-invert-y', 'invertY');
+    bindCheck('setting-reduced-motion', 'reduceMotion');
     bindCheck('setting-debug', 'showDebug');
     bindCheck('setting-autosave', 'autosave');
 
@@ -301,6 +342,13 @@ export class Menus {
         if (id === 'setting-sensitivity') label.textContent = Number(v).toFixed(4);
         if (id === 'setting-volume') label.textContent = `${Math.round(v * 100)} %`;
         if (id === 'setting-day-length') label.textContent = v <= 0 ? 'Aus' : `${Math.round(v)} s`;
+        if (id === 'setting-autosave-interval') {
+          const seconds = Math.round(Number(v));
+          const minutes = Math.floor(seconds / 60);
+          const remainder = seconds % 60;
+          label.textContent = seconds < 60 ? `${seconds} s`
+            : remainder ? `${minutes} min ${remainder} s` : `${minutes} min`;
+        }
       }
     };
     setVal('setting-render-distance', s.renderDistance);
@@ -308,10 +356,12 @@ export class Menus {
     setVal('setting-sensitivity', s.sensitivity);
     setVal('setting-volume', s.volume);
     setVal('setting-day-length', s.dayLength);
+    setVal('setting-autosave-interval', s.autosaveInterval);
     const setSel = (id, v) => { const el = this._el(id); if (el) el.value = v; };
     setSel('setting-particles', s.particles);
     const setChk = (id, v) => { const el = this._el(id); if (el) el.checked = !!v; };
     setChk('setting-invert-y', s.invertY);
+    setChk('setting-reduced-motion', s.reduceMotion);
     setChk('setting-debug', s.showDebug);
     setChk('setting-autosave', s.autosave !== false);
   }
@@ -319,6 +369,8 @@ export class Menus {
   /** Spielstand-Buttons im Hauptmenü aktivieren. */
   setHasSave(has) {
     const btn = this.els['btn-play'];
+    const exportButton = this.els['btn-export-save'];
+    if (exportButton) exportButton.disabled = !has;
     if (btn) {
       btn.disabled = !has;
       const label = btn.querySelector && btn.querySelector('.play-menu-label');
@@ -1770,6 +1822,8 @@ export class Menus {
       </ul>
       <h3>Tipps</h3>
       <ul>
+        <li>Das HUD zeigt Biom, Weltzeit, Wetter und Höhe; beim Anvisieren erscheinen Blockhinweise.</li>
+        <li>Bei Bedarf Kopf-Bobbing und Sprint-Zoom in den Einstellungen abschalten.</li>
         <li>Auf dem Handy ist die Renderdistanz kleiner – in den Einstellungen erhöhbar.</li>
         <li>Im Kreativmodus kannst du fliegen und alle Blöcke platzieren.</li>
         <li>Nachts kommen Zombies – im Friedlich-Modus nicht!</li>
@@ -1790,7 +1844,8 @@ export class Menus {
         <li><b>Crafting:</b> Das Spielerraster ist 2×2, Werkbänke bieten 3×3. Rechtsklick nimmt ein Ergebnis; Shift-Klick craftet so viel wie möglich.</li>
         <li><b>Tooltips & Ausrüstung:</b> Über Items fahren; Nebenhand und definierte Ausrüstung werden gespeichert.</li>
         <li>Ein Cursorstapel wird beim Schließen als Welt-Drop vor dem Spieler abgelegt.</li>
-        <li><b>F:</b> Fliegen umschalten &nbsp;|&nbsp; <b>F3:</b> Debug-Infos</li>
+        <li><b>F1:</b> HUD für Screenshots aus-/einblenden &nbsp;|&nbsp; <b>F:</b> Fliegen &nbsp;|&nbsp; <b>F3:</b> Debug-Infos</li>
+        <li>Unter Einstellungen lässt sich Kamerabewegung reduzieren; Zielhinweise zeigen Blockaktionen am Fadenkreuz.</li>
         <li><b>M:</b> Spielmodus wechseln &nbsp;|&nbsp; <b>P:</b> Friedlich umschalten</li>
         <li><b>T:</b> Tag/Nacht springen &nbsp;|&nbsp; <b>O:</b> Wetter umschalten</li>
         <li><b>F5:</b> Spiel speichern</li>
